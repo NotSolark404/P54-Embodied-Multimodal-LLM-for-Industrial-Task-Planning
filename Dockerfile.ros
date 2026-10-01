@@ -1,0 +1,16 @@
+FROM osrf/ros:humble-desktop
+
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    ros-humble-moveit \
+    ros-humble-ros2-control \
+    libgl1-mesa-glx \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir langchain-ollama
+
+COPY . .
