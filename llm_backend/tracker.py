@@ -5,7 +5,7 @@ Cross-domain pipeline tracker for the Multimodal LLM Industrial Task Planning sy
 
 Assigns a unique task_id to every instruction and records what happens at
 each pipeline stage:
-    1. llm_parse        - LLM instruction parser (this module)
+    1. llm_parse        - LLM parse stage (this module)
     2. vision_lookup    - Vision module scene lookup
     3. task_plan        - Task planning module
     4. execution        - Execution module
@@ -15,7 +15,7 @@ Each stage records: timestamp, status, output payload, latency, and any errors.
 All events are written to a rolling task_log.json for audit and debugging.
 
 Usage:
-    from tracker import PipelineTracker
+    from llm_backend.tracker import PipelineTracker
 
     tracker = PipelineTracker()
     task_id = tracker.new_task("pick up the red block")
