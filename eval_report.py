@@ -38,9 +38,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from test_cases import TEST_CASES, get_all_categories
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from llm_backend.LLM_eval.baseline_parser import run_baseline_evaluation
+from baseline_parser import run_baseline_evaluation
 from model_registry import get_available_models, MODEL_DISPLAY_NAMES
 
 SEP  = "═" * 70
@@ -60,8 +58,8 @@ def run_pipeline_evaluation(
     Returns results in same format as baseline_parser for direct comparison.
     """
     from task_planner.planner import TaskPlanner
-    from simulation_backend.mock_robot import MockRobot
-    from simulation_backend.executor   import Executor
+    from execution.mock_robot import MockRobot
+    from execution.executor   import Executor
 
     if models is None:
         models = get_available_models()
@@ -86,7 +84,7 @@ def run_pipeline_evaluation(
             print(f"  {SEP2}")
 
         try:
-            from llm_backend.LLM_eval.model_registry import get_chain
+            from model_registry import get_chain
             from langchain_core.output_parsers import PydanticOutputParser
             from schema import ParsedInstruction
             from edge_cases import (is_empty_instruction, is_too_vague,

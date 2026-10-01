@@ -9,11 +9,11 @@ Backend is selected at runtime via the LLM_BACKEND environment variable:
     LLM_BACKEND=openai    (default) -- uses OpenAI GPT-4o
     LLM_BACKEND=gemini               -- uses Google Gemini
     LLM_BACKEND=deepseek             -- uses DeepSeek
-    LLM_BACKEND=ollama               -- uses a local Ollama model, no API key
+    LLM_BACKEND=huggingface          -- uses local HuggingFace model
 
 All API credentials and model config are owned entirely by the backend
 modules (backends/openai_backend.py, backends/gemini_backend.py,
-backends/deepseek_backend.py, backends/ollama_backend.py).
+backends/deepseek_backend.py, backends/huggingface_backend.py). 
 This file contains zero credential logic.
 
 Full pipeline per call:
@@ -36,8 +36,8 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.exceptions import OutputParserException
 
-from .schema import ParsedInstruction, MultiActionInstruction, ConfidenceLevel
-from .prompts import build_system_prompt, build_multi_action_prompt
+from .schema import ParsedInstruction
+from .prompts import build_system_prompt
 from .edge_cases import (
     is_empty_instruction,
     is_too_vague,
@@ -46,7 +46,6 @@ from .edge_cases import (
     make_vague_result,
 )
 from .backends import get_llm
-from .multi_action import split_instruction
 
 # -- Logging -------------------------------------------------------------------
 logging.basicConfig(
@@ -65,8 +64,6 @@ load_dotenv()
 # braces inside the system prompt (format_instructions + few-shot examples).
 output_parser = PydanticOutputParser(pydantic_object=ParsedInstruction)
 system_prompt = build_system_prompt(output_parser.get_format_instructions())
-# S5-3: prompt used when parsing one sub-instruction of a multi-action command.
-multi_action_prompt = build_multi_action_prompt(output_parser.get_format_instructions())
 
 # -- Lazy LLM initialisation --------------------------------------------------
 # The LLM is NOT created at import time. This avoids crashing the entire
@@ -104,11 +101,7 @@ def _clean_json(text: str) -> str:
 
 
 # -- Public interface ----------------------------------------------------------
-def parse_instruction(
-    instruction: str,
-    max_retries: int = 2,
-    system_prompt_override: str | None = None,
-) -> ParsedInstruction:
+def parse_instruction(instruction: str, max_retries: int = 2) -> ParsedInstruction:
     # existing pre-checks ...
     if is_empty_instruction(instruction):
         raise ValueError("Instruction cannot be empty.")
@@ -117,11 +110,10 @@ def parse_instruction(
 
     instruction = normalise_instruction(instruction)
     model = os.getenv("LLM_BACKEND", "openai")
-    effective_prompt = system_prompt_override or system_prompt
 
     # ── Cache check ──────────────────────────────────────────────────────────
     from llm_backend.cache import get_cached, save_cache
-    cached = get_cached(instruction, model, effective_prompt)
+    cached = get_cached(instruction, model)
     if cached:
         logger.info(f"[Cache] Returning cached result for: '{instruction}'")
         return ParsedInstruction(**cached)
@@ -133,7 +125,7 @@ def parse_instruction(
     for attempt in range(1, max_retries + 1):
         try:
             messages = [
-                SystemMessage(content=effective_prompt),
+                SystemMessage(content=system_prompt),
                 HumanMessage(content=f"Instruction: {instruction}"),
             ]
             response = _get_llm().invoke(messages)
@@ -148,7 +140,7 @@ def parse_instruction(
             result = validate_parsed_result(result)
 
             # ── Save to cache ─────────────────────────────────────────────
-            save_cache(instruction, model, result.model_dump(mode="json"), effective_prompt)
+            save_cache(instruction, model, result.model_dump(mode="json"))
 
             logger.info(f"Parsed successfully on attempt {attempt}: {result}")
             return result
@@ -163,91 +155,4 @@ def parse_instruction(
     raise ValueError(
         f"Failed to parse instruction after {max_retries} attempts. "
         f"Last error: {last_error}"
-    )
-
-# -- S5-3: Multi-action public interface ---------------------------------------
-_CONFIDENCE_RANK = {
-    ConfidenceLevel.HIGH:   3,
-    ConfidenceLevel.MEDIUM: 2,
-    ConfidenceLevel.LOW:    1,
-}
-
-
-def parse_multi_instruction(
-    instruction: str,
-    max_retries: int = 2,
-) -> MultiActionInstruction:
-    """
-    S5-3 — Parse an instruction that may contain SEVERAL sequential actions.
-
-    Pipeline:
-        1. Split the instruction into ordered single-action segments
-           (llm_backend/multi_action.py — deterministic, no API call).
-        2. Parse each segment with the existing parse_instruction(), so all
-           existing behaviour is preserved per action: edge-case pre-checks,
-           synonym mapping, retries, disk cache, and post-validation.
-        3. Collect the results in EXECUTION ORDER.
-
-    A single-action instruction still returns a MultiActionInstruction, with
-    one action and is_multi_action=False, so callers need only one code path.
-
-    Args:
-        instruction : Raw natural language instruction.
-        max_retries : Retries per sub-instruction on JSON parse failure.
-
-    Returns:
-        MultiActionInstruction — actions in execution order.
-
-    Raises:
-        ValueError: If the instruction is empty, or if any sub-instruction
-                    fails to parse. The error names WHICH action failed so the
-                    pipeline can report a clear reason instead of failing
-                    silently or dropping the remaining actions.
-    """
-    if is_empty_instruction(instruction):
-        raise ValueError("Instruction cannot be empty.")
-
-    segments = split_instruction(instruction)
-    if not segments:
-        raise ValueError("Instruction cannot be empty.")
-
-    multi = len(segments) > 1
-    if multi:
-        logger.info(
-            f"[multi-action] Split into {len(segments)} actions: {segments}"
-        )
-
-    prompt_override = multi_action_prompt if multi else None
-
-    actions: list[ParsedInstruction] = []
-    collected_notes: list[str] = []
-
-    for index, segment in enumerate(segments, start=1):
-        try:
-            parsed = parse_instruction(
-                segment,
-                max_retries=max_retries,
-                system_prompt_override=prompt_override,
-            )
-        except Exception as exc:
-            raise ValueError(
-                f"Action {index}/{len(segments)} ('{segment}') could not be "
-                f"parsed: {exc}"
-            ) from exc
-
-        actions.append(parsed)
-        if parsed.notes:
-            collected_notes.append(f"[action {index}] {parsed.notes}")
-
-    # Overall confidence is the WEAKEST link — a plan is only as trustworthy
-    # as its least certain step.
-    overall = min(actions, key=lambda a: _CONFIDENCE_RANK[a.confidence]).confidence
-
-    return MultiActionInstruction(
-        raw_instruction=instruction,
-        actions=actions,
-        is_multi_action=multi,
-        confidence=overall,
-        segments=segments,
-        notes=" ".join(collected_notes) or None,
     )

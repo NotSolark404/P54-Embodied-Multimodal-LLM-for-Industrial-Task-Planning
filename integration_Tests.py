@@ -21,12 +21,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import pytest
-from llm_backend.schema import ParsedInstruction, ActionType, ConfidenceLevel
+from schema import ParsedInstruction, ActionType, ConfidenceLevel
 from task_planner.planner import TaskPlanner, _apply_spatial_offset
-from simulation_backend.action_schema import ActionPlan, CommandType
-from simulation_backend.mock_robot    import MockRobot
-from simulation_backend.executor      import Executor
-from llm_backend.tracker                 import PipelineTracker
+from execution.action_schema import ActionPlan, CommandType
+from execution.mock_robot    import MockRobot
+from execution.executor      import Executor
+from tracker                 import PipelineTracker
 
 
 # ── Shared fixtures ────────────────────────────────────────────────────────────
@@ -377,7 +377,7 @@ class TestFullPipelineIntegration:
 class TestBaselineParser:
 
     def test_simple_pick_parsed(self):
-        from llm_backend.LLM_eval.baseline_parser import BaselineParser
+        from baseline_parser import BaselineParser
         p = BaselineParser()
         r = p.parse("pick up the red block")
         assert r.action == "pick"
@@ -385,21 +385,21 @@ class TestBaselineParser:
         assert r.parse_success is True
 
     def test_simple_place_parsed(self):
-        from llm_backend.LLM_eval.baseline_parser import BaselineParser
+        from baseline_parser import BaselineParser
         p = BaselineParser()
         r = p.parse("place the blue cube in the left tray")
         assert r.action == "place"
         assert r.destination == "left tray"
 
     def test_synonym_not_handled(self):
-        from llm_backend.LLM_eval.baseline_parser import BaselineParser
+        from baseline_parser import BaselineParser
         p = BaselineParser()
         r = p.parse("grab the red block")
         # grab IS in keyword list so baseline should handle this
         assert r.action == "pick"
 
     def test_spatial_not_resolved(self):
-        from llm_backend.LLM_eval.baseline_parser import BaselineParser
+        from baseline_parser import BaselineParser
         p = BaselineParser()
         r = p.parse("place the red block to the left of the blue block")
         # Baseline can extract spatial keyword but can't compute position
@@ -408,20 +408,20 @@ class TestBaselineParser:
         assert r.destination is None or "blue" not in (r.destination or "")
 
     def test_empty_instruction_fails_gracefully(self):
-        from llm_backend.LLM_eval.baseline_parser import BaselineParser
+        from baseline_parser import BaselineParser
         p = BaselineParser()
         r = p.parse("")
         assert r.parse_success is False
         assert r.confidence == "low"
 
     def test_latency_is_sub_millisecond(self):
-        from llm_backend.LLM_eval.baseline_parser import BaselineParser
+        from baseline_parser import BaselineParser
         p = BaselineParser()
         r = p.parse("pick up the red block")
         assert r.latency_ms < 10.0  # should be microseconds, well under 10ms
 
     def test_baseline_evaluation_runs(self):
-        from llm_backend.LLM_eval.baseline_parser import run_baseline_evaluation
+        from baseline_parser import run_baseline_evaluation
         results = run_baseline_evaluation(verbose=False)
         assert len(results) == 25  # all test cases
         assert all("model" in r for r in results)
@@ -429,7 +429,7 @@ class TestBaselineParser:
 
     def test_baseline_accuracy_lower_than_expected_for_spatial(self):
         """Baseline should score lower on spatial than LLM (no position resolution)."""
-        from llm_backend.LLM_eval.baseline_parser import run_baseline_evaluation
+        from baseline_parser import run_baseline_evaluation
         results  = run_baseline_evaluation(verbose=False)
         spatial  = [r for r in results if r["category"] == "spatial"]
         simple   = [r for r in results if r["category"] == "simple"]
@@ -451,7 +451,7 @@ class TestLLMPipelineIntegration:
     """Requires OPENAI_API_KEY in .env. Run with: pytest -m integration"""
 
     def test_parse_and_plan_simple(self):
-        from llm_backend.custom_LLM_parser import parse_instruction
+        from parser import parse_instruction
         parsed = parse_instruction("pick up the red block")
         assert parsed.action.value == "pick"
         scene   = {"objects": [
@@ -462,7 +462,7 @@ class TestLLMPipelineIntegration:
         assert plan.total_steps >= 3
 
     def test_parse_and_plan_spatial(self):
-        from llm_backend.custom_LLM_parser import parse_instruction
+        from parser import parse_instruction
         parsed = parse_instruction(
             "place the red block to the left of the blue block"
         )
