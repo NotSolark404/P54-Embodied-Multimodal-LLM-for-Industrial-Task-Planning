@@ -1,78 +1,49 @@
 """
 task_planner/planner.py
 -----------------------
-Rule-based task planner. Combines a ParsedInstruction and the current scene
-into an ordered ActionPlan of RobotCommands.
+PB7 (Sprint 2) + PB7-SP + PB7-MULTI (Sprint 3)
 
-Capabilities:
-    - Single-action planning: locate → move → pick → move → place, for plain
-      pick/place/move/locate instructions.
+Sprint 3 additions:
     - Spatial relation handling: "left of", "right of", "near", "on top of",
-      "next to", "in front of", "behind" → calculates an offset position
-      relative to a reference object (see TECHNICAL_NOTES.md for the offset
-      table and axis convention).
-    - Multi-action planning (plan_multi_step()): chains several parsed
-      actions into one continuous, sequentially renumbered ActionPlan.
-      Plans each action against a working copy of the scene that is updated
-      after every sub-plan, and tracks gripper state across actions so a
-      pick with no matching place is caught at plan time rather than failing
-      mid-execution.
+      "next to" → calculates offset position relative to reference object
+    - Multi-step instruction handling: detects sequential two-action instructions
+      and generates a compound plan (e.g. pick A then move B)
 
 Usage:
     from task_planner.planner import TaskPlanner
     planner = TaskPlanner()
     plan    = planner.generate_plan(parsed_instruction, scene)
     plan.print_plan()
-
-    # Multi-action:
-    plan = planner.plan_multi_step(parsed_instructions, scene)
 """
 
-import copy
 import logging
 import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from llm_backend.schema import ParsedInstruction, ActionType
-from simulation_backend.action_schema import ActionPlan, RobotCommand, CommandType, Position
+from schema import ParsedInstruction, ActionType
+from execution.action_schema import ActionPlan, RobotCommand, CommandType, Position
 
 logger = logging.getLogger(__name__)
 
 # ── Spatial offset map ─────────────────────────────────────────────────────────
-# Maps spatial relation strings to (dx, dy) offsets in METRES, matching the units
-# used throughout scene_config.yaml. Applied relative to the reference object's
-# position.
-#
-# Axis convention is the workspace's own: +X points away from the robot base,
-# +Y is the robot's left. That is why 'left tray' sits at y=+0.45 and
-# 'right tray' at y=-0.45 — so left/right offsets move along Y, and
-# front/behind along X.
-_CLEARANCE_M = 0.15   # gap from the reference object's centre; blocks are 0.05 m
-
+# Maps spatial relation strings to (dx, dy) offsets in workspace units.
+# Applied relative to the reference object's position.
 SPATIAL_OFFSETS: dict[str, tuple[float, float]] = {
-    "left of":    ( 0.0,  _CLEARANCE_M),
-    "left":       ( 0.0,  _CLEARANCE_M),
-    "right of":   ( 0.0, -_CLEARANCE_M),
-    "right":      ( 0.0, -_CLEARANCE_M),
-    "near":       (-0.10,  0.10),
-    "next to":    ( 0.0,  _CLEARANCE_M),
+    "left of":    (-1.5,  0.0),
+    "left":       (-1.5,  0.0),
+    "right of":   ( 1.5,  0.0),
+    "right":      ( 1.5,  0.0),
+    "near":       ( 0.8,  0.8),
+    "next to":    ( 1.2,  0.0),
     "on top of":  ( 0.0,  0.0),   # same x,y; height handled by real sim
-    "in front of":(-_CLEARANCE_M, 0.0),   # between the robot base and the object
-    "behind":     ( _CLEARANCE_M, 0.0),
+    "in front of":( 0.0, -1.5),
+    "behind":     ( 0.0,  1.5),
     "in":         ( 0.0,  0.0),   # inside container → use container position
-    # S5-3: "move X to the left tray" parses as spatial_relation="to". Without
-    # these, "to"/"into"/"onto" fell through to DEFAULT_OFFSET and the drop-off
-    # landed off the container centre.
-    "to":         ( 0.0,  0.0),
-    "into":       ( 0.0,  0.0),
-    "onto":       ( 0.0,  0.0),
-    "inside":     ( 0.0,  0.0),
-    "at":         ( 0.0,  0.0),
 }
 
-DEFAULT_OFFSET = (0.0, _CLEARANCE_M)  # fallback when relation not in map
+DEFAULT_OFFSET = (1.0, 0.0)  # fallback when relation not in map
 
 
 # ── Scene helpers ──────────────────────────────────────────────────────────────
@@ -398,60 +369,14 @@ class TaskPlanner:
         all_commands = []
         step_offset  = 0
 
-        # S5-3: plan each action against a WORKING COPY of the scene that is
-        # updated after every sub-plan. Without this, action 2 would still be
-        # planned against action 1's starting positions, so an instruction like
-        # "move the red block to the left tray then move it to the right tray"
-        # would target a block that is no longer there.
-        working_scene = copy.deepcopy(scene)
-
-        # S5-3: the robot has ONE gripper. If an action picks something up and
-        # never puts it down, the next action cannot pick anything else. Catch
-        # that here, at plan time, with a clear reason — instead of letting the
-        # executor fail halfway through a partially executed plan.
-        held_object: str | None = None
-        held_by_action: int = 0
-
         for i, parsed in enumerate(instructions):
-            try:
-                sub_plan = self.generate_plan(parsed, working_scene, task_id=None)
-            except ValueError as e:
-                # Fail safely with a clear reason naming the offending action,
-                # instead of silently dropping it or executing a partial plan.
-                raise ValueError(
-                    f"Action {i + 1}/{len(instructions)} "
-                    f"('{parsed.raw_instruction}') could not be planned: {e}"
-                ) from e
-
-            picks  = sum(1 for c in sub_plan.commands
-                         if c.command_type == CommandType.PICK)
-            places = sum(1 for c in sub_plan.commands
-                         if c.command_type == CommandType.PLACE)
-
-            if held_object and picks:
-                raise ValueError(
-                    f"Action {i + 1}/{len(instructions)} "
-                    f"('{parsed.raw_instruction}') needs the gripper, but the "
-                    f"robot is still holding '{held_object}' from action "
-                    f"{held_by_action}. Give action {held_by_action} a "
-                    f"destination, or place '{held_object}' before this action."
-                )
-
+            sub_plan = self.generate_plan(parsed, scene, task_id=None)
             for cmd in sub_plan.commands:
                 new_cmd = cmd.model_copy(
                     update={"step": cmd.step + step_offset}
                 )
                 all_commands.append(new_cmd)
             step_offset += len(sub_plan.commands)
-
-            if picks > places:
-                held_object    = parsed.object_target
-                held_by_action = i + 1
-            elif places:
-                held_object    = None
-                held_by_action = 0
-
-            self._apply_plan_to_scene(working_scene, parsed, sub_plan)
             logger.info(f"Sub-plan {i+1}: {len(sub_plan.commands)} steps added")
 
         combined_instruction = " | ".join(p.raw_instruction for p in instructions)
@@ -461,44 +386,3 @@ class TaskPlanner:
             instruction=combined_instruction,
             commands=all_commands,
         )
-
-    # -- Predicted scene state (S5-3) -------------------------------------------
-
-    @staticmethod
-    def _apply_plan_to_scene(scene: dict, parsed: ParsedInstruction, sub_plan) -> None:
-        """
-        Update a working scene dict to reflect where a sub-plan leaves its object.
-
-        Called between sub-plans in plan_multi_step() so later actions are
-        planned against the predicted workspace state rather than the original
-        one. Only moves that actually end in a PLACE change anything; LOCATE and
-        bare PICK leave the scene untouched.
-
-        Args:
-            scene:    Working scene dict — mutated in place.
-            parsed:   The instruction this sub-plan came from.
-            sub_plan: The ActionPlan generated for it.
-        """
-        from simulation_backend.action_schema import CommandType
-
-        if not any(c.command_type == CommandType.PLACE for c in sub_plan.commands):
-            return
-
-        # The final MOVE before the PLACE carries the drop-off position.
-        final_position = None
-        for cmd in sub_plan.commands:
-            if cmd.command_type == CommandType.MOVE and cmd.target_position is not None:
-                final_position = cmd.target_position
-        if final_position is None:
-            return
-
-        query = (parsed.object_target or "").lower()
-        for obj in scene.get("objects", []):
-            label = (obj.get("label") or obj.get("name") or "").lower()
-            if query and (query in label or label in query):
-                obj["position"] = (final_position.x, final_position.y)
-                logger.info(
-                    f"Predicted scene update: '{label}' -> "
-                    f"({final_position.x:.2f}, {final_position.y:.2f})"
-                )
-                return
