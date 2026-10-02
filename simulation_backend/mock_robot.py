@@ -46,6 +46,35 @@ class CommandResult:
         return f"{status} [{self.command}] {self.message} ({self.latency_ms:.0f}ms)"
 
 
+def _resolve_limits(workspace):
+    """
+    Turn whatever was passed as `workspace` into a WorkspaceLimits.
+
+    Accepts None (shared project limits), a WorkspaceLimits, or the legacy
+    (width, height) tuple, which is read as a box from the origin so callers
+    written before Sprint 6 behave exactly as they did.
+    """
+    from task_planner.safety import WorkspaceLimits, default_limits
+
+    if workspace is None:
+        return default_limits()
+    if isinstance(workspace, WorkspaceLimits):
+        return workspace
+    if isinstance(workspace, (tuple, list)) and len(workspace) >= 2:
+        return WorkspaceLimits(
+            x_min=0.0, x_max=float(workspace[0]),
+            y_min=0.0, y_max=float(workspace[1]),
+            z_min=0.0, z_max=float(workspace[2]) if len(workspace) > 2 else 1.0,
+            reach_m=float("inf"),
+            min_radius_m=0.0,
+            source="legacy (width, height) tuple",
+        )
+    raise TypeError(
+        f"workspace must be None, a WorkspaceLimits or a (width, height) tuple, "
+        f"got {type(workspace).__name__}"
+    )
+
+
 # ── Mock robot ─────────────────────────────────────────────────────────────────
 class MockRobot:
     """
@@ -55,18 +84,31 @@ class MockRobot:
         position    Current (x, y) position of the robot arm
         held_object Name of the object currently held (None if empty)
         object_map  Dict of object_name → {"position": (x,y), "held": bool}
-        workspace   (width, height) of the workspace
+        workspace   Workspace limits (see __init__)
 
     All commands return a CommandResult with success/failure and a message.
     """
 
     def __init__(
         self,
-        workspace: tuple = (10.0, 10.0),
+        workspace=None,
         move_speed: float = 1.0,
         simulate_latency: bool = True,
     ):
-        self.workspace        = workspace
+        """
+        Args:
+            workspace: Workspace limits. Three forms are accepted:
+                       None               - the shared limits from
+                                            task_planner.safety, read from
+                                            scene_config.yaml. This is the
+                                            default and the correct choice.
+                       WorkspaceLimits    - explicit limits.
+                       (width, height)    - the pre-Sprint-6 form, kept so older
+                                            callers still work. Interpreted as
+                                            0 <= x <= width, 0 <= y <= height.
+        """
+        self._limits    = _resolve_limits(workspace)
+        self.workspace  = workspace if workspace is not None else self._limits
         self.move_speed       = move_speed
         self.simulate_latency = simulate_latency
 
@@ -122,12 +164,21 @@ class MockRobot:
         """
         start = time.perf_counter()
 
-        # Boundary check
-        if not (0 <= x <= self.workspace[0] and 0 <= y <= self.workspace[1]):
+        # Boundary check.
+        #
+        # Before Sprint 6 this read `0 <= x <= 10 and 0 <= y <= 10`, which was
+        # wrong in both directions: it rejected every object on the robot's
+        # right, because the right tray sits at y = -0.45 and the red block at
+        # y = -0.20, and it accepted a target nine metres off a table that is
+        # two metres wide. The limits now come from scene_config.yaml through
+        # task_planner.safety, the same source the real robots and the Executor
+        # use, so there is one definition of the workspace instead of three.
+        reason = self._limits.reason_for_rejecting(x, y, z)
+        if reason:
             return CommandResult(
                 success=False,
                 command="move_to",
-                message=f"Position ({x}, {y}) is outside workspace bounds {self.workspace}",
+                message=f"Position ({x}, {y}, {z}) rejected - {reason}",
                 latency_ms=self._elapsed(start),
             )
 
@@ -146,7 +197,17 @@ class MockRobot:
         return result
 
     def move_to_object(self, object_name: str) -> CommandResult:
-        """Move robot arm to the position of a named object."""
+        """
+        Move robot arm to the position of a named object.
+
+        The boundary check applies here too. Before Sprint 6 this method set
+        self._position directly, which meant the check in move_to() was
+        unreachable in the normal pipeline: the planner tags every MOVE command
+        with a target_object as well as a target_position, and the Executor
+        routes a MOVE with an object name to this method. So an object the
+        vision module reported outside the workspace was moved to without any
+        boundary check at all.
+        """
         start = time.perf_counter()
         obj   = self._find_object(object_name)
 
@@ -159,6 +220,19 @@ class MockRobot:
             )
 
         pos = obj["position"]
+        x, y = float(pos[0]), float(pos[1])
+        z = float(pos[2]) if len(pos) > 2 else 0.0
+
+        reason = self._limits.reason_for_rejecting(x, y, z)
+        if reason:
+            return CommandResult(
+                success=False,
+                command="move_to_object",
+                message=(f"'{object_name}' at ({x}, {y}) is not reachable - "
+                         f"{reason}"),
+                latency_ms=self._elapsed(start),
+            )
+
         self._position = pos
         result = CommandResult(
             success=True,
