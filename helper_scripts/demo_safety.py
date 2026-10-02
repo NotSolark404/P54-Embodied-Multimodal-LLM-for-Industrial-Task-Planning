@@ -181,8 +181,8 @@ def main():
     print(f"  Plans refused         : {blocked}  (no command sent in either case)")
     print(f"  Emergency stop        : halted at a command boundary, "
           f"{result.steps_completed} step(s) left completed")
-    print(f"  Workspace definitions : 1  (was 4 — MockRobot, RobotBase, "
-          f"Kuka_IIWA, Franka_panda)")
+    print("  Workspace definitions : 1  (was 4 — MockRobot, RobotBase, "
+          "Kuka_IIWA, Franka_panda)")
     print(SEP)
 
 

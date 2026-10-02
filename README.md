@@ -121,11 +121,11 @@ P54-Embodied-Multimodal-LLM-for-Industrial-Task-Planning/
 │
 ├── helper_scripts/                      ← Standalone utility scripts, run independently of the main pipeline
 │
-├── tests/                               ← Test suite (198 tests total)
+├── tests/                               ← Test suite (200 tests total)
 │   ├── test_llm_module.py               ← 40 tests (28 unit + 12 integration)
 │   ├── test_sprint2.py                  ← 40 unit tests
 │   ├── test_multi_action.py             ← 42 tests (33 unit + 9 integration)
-│   ├── test_safety.py                   ← 44 unit tests
+│   ├── test_safety.py                   ← 46 unit tests
 │   ├── integration_tests.py             ← 31 tests (29 unit + 2 integration)
 │   └── test_real_vision_adapter.py      ← 1 unit test
 │
@@ -263,9 +263,11 @@ footprint and still be further from the base than the arm is long.
 `ROBOT_MODEL=mock | franka | kuka` all share these limits.
 
 **Emergency stop.** In interactive mode, `stop` arms a software stop and `resume`
-clears it; Ctrl-C does the same from the terminal, and a second Ctrl-C kills the
-process. A stop halts the plan at the next command boundary, so a motion already
-under way completes rather than being cut off. This is a secondary measure —
+clears it. While a plan is executing, Ctrl-C does the same, and a second Ctrl-C
+kills the process outright; the handler is installed around execution only, so
+Ctrl-C at the prompt still quits the program. A stop halts the plan at the next
+command boundary, so a motion already under way completes rather than being cut
+off. This is a secondary measure —
 **the hardware emergency stop on the robot cell is the primary one.** The
 procedure for physical runs is in
 [`documentation/SAFETY_PROCEDURE.md`](documentation/SAFETY_PROCEDURE.md) and must
@@ -273,7 +275,7 @@ be read before any run that moves a real arm.
 
 ```bash
 python helper_scripts/demo_safety.py     # the check and the stop, demonstrated
-pytest tests/test_safety.py -v           # 44 tests, no API key needed
+pytest tests/test_safety.py -v           # 46 tests, no API key needed
 SAFETY_CHECK=off python main.py "..."    # check disabled — simulation only
 ```
 
@@ -435,7 +437,7 @@ Validates task completion, logs all 5 stages to `task_log.json` with a unique `t
 ```bash
 pytest tests/ -v -m "not integration"
 ```
-Expected: **175 passed, 23 deselected**
+Expected: **177 passed, 23 deselected**
 
 ### Integration-style tests that still don't need an API key
 ```bash
@@ -446,7 +448,7 @@ pytest tests/integration_tests.py -v -m "not integration"
 ```bash
 pytest tests/ -v
 ```
-198 tests total (175 unit + 23 marked `integration`), spread across `test_llm_module.py`, `test_sprint2.py`, `test_multi_action.py`, `test_safety.py`, `integration_tests.py`, and `test_real_vision_adapter.py`.
+200 tests total (177 unit + 23 marked `integration`), spread across `test_llm_module.py`, `test_sprint2.py`, `test_multi_action.py`, `test_safety.py`, `integration_tests.py`, and `test_real_vision_adapter.py`.
 
 ### Single test class
 ```bash
@@ -464,10 +466,10 @@ pytest tests/test_safety.py::TestExecutorSafetyGate -v
 | `tests/test_llm_module.py` | 40 | 28 | 12 |
 | `tests/test_sprint2.py` | 40 | 40 | 0 |
 | `tests/test_multi_action.py` | 42 | 33 | 9 |
-| `tests/test_safety.py` | 44 | 44 | 0 |
+| `tests/test_safety.py` | 46 | 46 | 0 |
 | `tests/integration_tests.py` | 31 | 29 | 2 |
 | `tests/test_real_vision_adapter.py` | 1 | 1 | 0 |
-| **Total** | **198** | **175** | **23** |
+| **Total** | **200** | **177** | **23** |
 
 ---
 

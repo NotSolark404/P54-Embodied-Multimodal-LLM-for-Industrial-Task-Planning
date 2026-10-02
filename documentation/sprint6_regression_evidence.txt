@@ -1,23 +1,23 @@
 P54 — Sprint 6 (S6-10) full regression run
-Date: 2026-10-02 16:15 UTC
+Date: 2026-10-02 16:36 UTC
 Branch: Kaveesha_Sprint_6_Safety
 Python: Python 3.11.15
 
 $ pytest -m "not integration" -q
 
-........................................................................ [ 41%]
-........................................................................ [ 82%]
-...............................                                          [100%]
-175 passed, 23 deselected in 0.38s
+........................................................................ [ 40%]
+........................................................................ [ 81%]
+.................................                                        [100%]
+177 passed, 23 deselected in 0.45s
 
 $ pytest --collect-only -q | tail -1   # total including integration-marked
 
-198 tests collected in 0.20s
+200 tests collected in 0.20s
 
 Per file:
-  tests/test_llm_module.py               28 passed, 12 deselected in 0.11s
-  tests/test_sprint2.py                  40 passed in 0.14s
-  tests/test_multi_action.py             33 passed, 9 deselected in 0.17s
-  tests/test_safety.py                   44 passed in 0.25s
+  tests/test_llm_module.py               28 passed, 12 deselected in 0.12s
+  tests/test_sprint2.py                  40 passed in 0.15s
+  tests/test_multi_action.py             33 passed, 9 deselected in 0.14s
+  tests/test_safety.py                   46 passed in 0.24s
   tests/integration_tests.py             29 passed, 2 deselected in 0.14s
-  tests/test_real_vision_adapter.py      1 passed in 0.08s
+  tests/test_real_vision_adapter.py      1 passed in 0.09s

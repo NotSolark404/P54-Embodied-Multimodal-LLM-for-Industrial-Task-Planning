@@ -40,7 +40,6 @@ from simulation_backend.action_schema import ActionPlan, CommandType, RobotComma
 from simulation_backend.mock_robot import MockRobot, CommandResult
 from task_planner.safety import (
     EmergencyStop,
-    EmergencyStopped,
     SafetyReport,
     WorkspaceLimits,
     validate_plan,

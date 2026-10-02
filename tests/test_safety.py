@@ -20,8 +20,6 @@ missing object, missing destination) still fail at plan time, before the safety
 check ever sees a plan.
 """
 
-import math
-
 import pytest
 
 from llm_backend.schema import ParsedInstruction, ActionType, ConfidenceLevel
@@ -323,6 +321,40 @@ class TestEmergencyStop:
         assert estop.reason == "first"
         estop.clear()
         assert not estop.triggered and estop.reason is None
+
+    def test_ctrl_c_arms_the_stop_instead_of_killing_the_process(self):
+        """
+        The README and the safety procedure both tell the operator that Ctrl-C
+        arms the stop during a plan. This asserts the handler is real, because a
+        safety document that promises a behaviour nobody wired up is worse than
+        one that promises nothing.
+        """
+        import os
+        import signal as signal_module
+
+        estop = EmergencyStop()
+        estop.install_signal_handler()
+        try:
+            os.kill(os.getpid(), signal_module.SIGINT)
+        finally:
+            estop.restore_signal_handler()
+
+        assert estop.triggered
+        assert "Ctrl-C" in (estop.reason or "")
+
+    def test_restore_puts_the_previous_handler_back(self):
+        """
+        Ctrl-C at the interactive prompt must still quit the program, so the
+        handler is installed around execution only and removed afterwards.
+        """
+        import signal as signal_module
+
+        before = signal_module.getsignal(signal_module.SIGINT)
+        estop = EmergencyStop()
+        estop.install_signal_handler()
+        assert signal_module.getsignal(signal_module.SIGINT) is not before
+        estop.restore_signal_handler()
+        assert signal_module.getsignal(signal_module.SIGINT) is before
 
     def test_cleared_stop_lets_the_plan_run(self):
         robot = MockRobot()

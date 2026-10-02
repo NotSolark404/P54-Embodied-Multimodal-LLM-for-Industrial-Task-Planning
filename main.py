@@ -349,7 +349,16 @@ def run_pipeline(
             safety_limits=_safety_limits_for_run(),
             emergency_stop=emergency_stop,
         )
-        exec_res = executor.execute(plan, verbose=verbose)
+        # S6-9: Ctrl-C arms the emergency stop only while a plan is executing.
+        # Installing it for the whole session would swallow the Ctrl-C that quits
+        # the program, and the operator needs that to keep working.
+        if emergency_stop is not None:
+            emergency_stop.install_signal_handler()
+        try:
+            exec_res = executor.execute(plan, verbose=verbose)
+        finally:
+            if emergency_stop is not None:
+                emergency_stop.restore_signal_handler()
 
         result["execution"] = exec_res
 

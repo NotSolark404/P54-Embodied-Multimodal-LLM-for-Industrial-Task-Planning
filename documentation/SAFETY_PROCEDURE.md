@@ -98,9 +98,14 @@ steps stay completed and are reported.
 
 | From | Action |
 |---|---|
-| the interactive prompt | type `stop` — `resume` clears it |
-| the terminal | Ctrl-C once; a second Ctrl-C kills the process outright |
+| the interactive prompt, between plans | type `stop`. `resume` clears it |
+| the terminal, while a plan is running | Ctrl-C once. A second Ctrl-C kills the process outright |
 | code | `estop.trigger("reason")` on the shared `EmergencyStop` |
+
+The Ctrl-C handler is installed around plan execution and removed afterwards, so
+Ctrl-C at the prompt still quits the program as it always did. Two tests in
+`tests/test_safety.py` assert both halves of that, because a procedure that
+promises a behaviour nobody wired up is worse than one that promises nothing.
 
 `SAFETY_CHECK=off` disables the pre-execution check. It exists only for
 comparing behaviour against the pre-Sprint-6 pipeline and logs a warning every
@@ -163,7 +168,7 @@ and tell the team so this file can be corrected.
 | What | Where |
 |---|---|
 | Pre-execution check and emergency stop demonstrated | `documentation/sprint6_safety_evidence.txt` |
-| Tests, including every rejection case | `tests/test_safety.py` |
+| Tests, including every rejection case | `tests/test_safety.py`, 46 tests |
 | Guard implementation | `task_planner/safety.py` |
 | Pre-flight gate and stop polling | `simulation_backend/executor.py` |
 

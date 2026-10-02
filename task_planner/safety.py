@@ -48,8 +48,15 @@ Emergency stop:
     from task_planner.safety import EmergencyStop
 
     estop = EmergencyStop()
-    estop.install_signal_handler()                    # Ctrl-C becomes a stop
     Executor(robot, emergency_stop=estop).execute(plan)
+
+    # Ctrl-C during a plan. main.py installs this around execution only, so
+    # Ctrl-C at the prompt still quits the program:
+    estop.install_signal_handler()
+    try:
+        Executor(robot, emergency_stop=estop).execute(plan)
+    finally:
+        estop.restore_signal_handler()
 
 See documentation/SAFETY_PROCEDURE.md for the procedure the team follows in the
 lab. The software stop in this module is a secondary measure. It does not
@@ -304,7 +311,7 @@ def validate_plan(plan, limits: Optional[WorkspaceLimits] = None) -> SafetyRepor
     Returns:
         SafetyReport. `ok` is False if any target was rejected.
     """
-    limits = limits or WorkspaceLimits.from_scene_config()
+    limits = limits or default_limits()
 
     violations: list[SafetyViolation] = []
     positions = 0
@@ -404,11 +411,6 @@ class EmergencyStop:
         self._triggered = False
         self._reason = None
 
-    def check(self) -> None:
-        """Raise EmergencyStopped if a stop has been requested."""
-        if self._triggered:
-            raise EmergencyStopped(self._reason or "stop requested")
-
     # ── Ctrl-C ────────────────────────────────────────────────────────────────
 
     def install_signal_handler(self, sig=signal.SIGINT) -> None:
@@ -438,14 +440,6 @@ class EmergencyStop:
             except ValueError:
                 pass
             self._previous_handler = None
-
-
-class EmergencyStopped(RuntimeError):
-    """Raised inside the Executor when a stop was requested mid-plan."""
-
-    def __init__(self, reason: str):
-        self.reason = reason
-        super().__init__(f"Execution stopped by emergency stop: {reason}")
 
 
 # ── Convenience ────────────────────────────────────────────────────────────────
