@@ -351,11 +351,18 @@ class KukaIIWA(RobotBase):
         return False
 
     def _workspace_bounds(self) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
-        return ((0.05, -0.85, 0.0), (0.95, 0.85, 0.75))
+        """
+        The box the TCP is allowed inside, from the shared project limits.
 
-    def _within_bounds(self, x: float, y: float, z: float) -> bool:
-        lo, hi = self._workspace_bounds()
-        return lo[0] <= x <= hi[0] and lo[1] <= y <= hi[1] and lo[2] <= z <= hi[2]
+        This used to be the hardcoded pair ((0.05, -0.85, 0.0), (0.95, 0.85,
+        0.75)). Those numbers allowed |y| up to 0.85 m on a table that is 1.5 m
+        deep and therefore ends at y = +/-0.75, so the arm was permitted to reach
+        0.10 m past the table edge and into a perimeter wall. They also did not
+        match MockRobot's or Franka's. The limits now come from
+        scene_config.yaml through task_planner.safety, so the table geometry and
+        the reach limit cannot drift apart again.
+        """
+        return self._safety_limits().as_bounds()
 
     def _get_object_body_id(self, object_name: str) -> Optional[int]:
         entry = self._registry.get_by_label(object_name)

@@ -426,17 +426,47 @@ class RobotBase(ABC):
         Return the robot's reachable workspace bounds as ((x_min, y_min, z_min),
         (x_max, y_max, z_max)) in world metres.
 
-        Default returns generous bounds — subclasses should override with the
-        actual kinematic reach of their specific robot model.
+        Taken from the shared project limits in task_planner/safety.py, which
+        read the table geometry out of scene_config.yaml. Subclasses with a
+        different reach override _safety_limits(), not this method, so the table
+        half of the limits stays in one place.
+
+        This used to return ((-2.0, -2.0, -0.5), (2.0, 2.0, 2.0)) — two metres in
+        every direction and half a metre below the table surface — which was one
+        of four different workspace definitions in the codebase before Sprint 6.
 
         Returns:
             ((x_min, y_min, z_min), (x_max, y_max, z_max))
         """
-        return ((-2.0, -2.0, -0.5), (2.0, 2.0, 2.0))
+        return self._safety_limits().as_bounds()
+
+    def _safety_limits(self):
+        """
+        The WorkspaceLimits this robot is held to, cached on the instance.
+
+        Override in a subclass whose reach differs from the project default, for
+        example:
+
+            def _safety_limits(self):
+                import dataclasses
+                from task_planner.safety import default_limits
+                return dataclasses.replace(default_limits(), reach_m=0.855)
+        """
+        limits = getattr(self, "_limits_cache", None)
+        if limits is None:
+            from task_planner.safety import default_limits
+            limits = default_limits()
+            self._limits_cache = limits
+        return limits
 
     def _within_bounds(self, x: float, y: float, z: float = 0.0) -> bool:
         """
-        Check whether a target position is within the robot's workspace bounds.
+        Check whether a target position is one this robot may be sent to.
+
+        Both the box and the reach envelope are applied. A box check on its own
+        passes targets that are inside the table footprint but further from the
+        base than the arm is long; the IK solver then fails to converge, with no
+        message an operator can act on.
 
         Args:
             x, y, z : Target TCP position in world metres.
@@ -444,10 +474,7 @@ class RobotBase(ABC):
         Returns:
             True if the position is reachable, False otherwise.
         """
-        (x_min, y_min, z_min), (x_max, y_max, z_max) = self._workspace_bounds()
-        return (x_min <= x <= x_max and
-                y_min <= y <= y_max and
-                z_min <= z <= z_max)
+        return self._safety_limits().contains(x, y, z)
 
     def __repr__(self) -> str:
         return (f"{self.__class__.__name__}("

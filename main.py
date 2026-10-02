@@ -49,6 +49,7 @@ from simulation_backend.vision.scene_representation import get_current_scene
 from simulation_backend.mock_robot import MockRobot
 from simulation_backend.executor   import Executor
 from simulation_backend.action_schema import plan_to_commands
+from task_planner.safety          import EmergencyStop, limits_from_env
 # force=True: importing custom_LLM_parser above already called basicConfig at
 # INFO, and the first call wins. Without force this is a silent no-op and every
 # run prints the library's INFO logs instead of the WARNING level asked for here.
@@ -102,6 +103,17 @@ def _execution_timeout_for_robot(robot) -> float:
     return float(os.getenv("EXECUTOR_TIMEOUT_SECONDS", "5.0"))
 
 
+def _safety_limits_for_run():
+    """
+    The workspace limits the pre-execution safety check uses (S6-9).
+
+    Read from scene_config.yaml, unless SAFETY_CHECK=off. The switch itself
+    lives in task_planner.safety next to the check it disables; see
+    limits_from_env().
+    """
+    return limits_from_env()
+
+
 # ── Pipeline ───────────────────────────────────────────────────────────────────
 
 def run_pipeline(
@@ -109,6 +121,7 @@ def run_pipeline(
     verbose:     bool = True,
     tracker:     PipelineTracker | None = None,
     sim=None,
+    emergency_stop: EmergencyStop | None = None,
 ) -> dict:
     """
     Run the full pipeline for a single instruction.
@@ -119,6 +132,10 @@ def run_pipeline(
         tracker     : PipelineTracker instance for cross-domain logging.
         sim         : Optional Simulation instance. Pass None to let the
                       vision adapter create a temporary real-vision scene.
+        emergency_stop : Optional EmergencyStop (S6-9). When supplied it is
+                      checked at every command boundary, so a stop request
+                      halts the plan without interrupting a motion already
+                      under way.
 
     Returns:
         Result dict — keys: success, task_id, parsed, plan, execution.
@@ -320,8 +337,22 @@ def run_pipeline(
             tracker=tracker,
             task_id=task_id,
             timeout_seconds=_execution_timeout_for_robot(robot),
+            # S6-9: the plan is validated against the workspace limits here,
+            # before the first command is sent, rather than one coordinate at a
+            # time once the arm is already moving.
+            safety_limits=_safety_limits_for_run(),
+            emergency_stop=emergency_stop,
         )
-        exec_res = executor.execute(plan, verbose=verbose)
+        # S6-9: Ctrl-C arms the emergency stop only while a plan is executing.
+        # Installing it for the whole session would swallow the Ctrl-C that quits
+        # the program, and the operator needs that to keep working.
+        if emergency_stop is not None:
+            emergency_stop.install_signal_handler()
+        try:
+            exec_res = executor.execute(plan, verbose=verbose)
+        finally:
+            if emergency_stop is not None:
+                emergency_stop.restore_signal_handler()
 
         result["execution"] = exec_res
 
@@ -525,10 +556,20 @@ def run_interactive(sim=None) -> None:
     _backend = os.getenv("LLM_BACKEND", "openai")
     vision_label = "REAL"
 
+    # S6-9: one stop object for the whole session. The Executor checks it at
+    # every command boundary, and 'stop' or Ctrl-C sets it, so a plan halts
+    # between commands instead of being interrupted part-way through a motion.
+    estop = EmergencyStop()
+
+    limits = _safety_limits_for_run()
+    safety_label = limits.describe() if limits else "DISABLED (SAFETY_CHECK=off)"
+
     print(f"\n{SEP}")
     print("  Multimodal LLM — Industrial Task Planning Pipeline")
     print(f"  Model: {_backend}  |  Vision: {vision_label}")
+    print(f"  Safety: {safety_label}")
     print("  Type 'quit' to exit  |  'status' for summary  |  'reset' to reset scene")
+    print("  'stop' arms the emergency stop  |  'resume' clears it")
     print(SEP + "\n")
 
     while True:
@@ -542,12 +583,24 @@ def run_interactive(sim=None) -> None:
                 break
             if instruction.lower() == "status":
                 tracker.print_summary()
+                if estop.triggered:
+                    print(f"  ■ Emergency stop is ARMED — {estop.reason}")
+                continue
+            if instruction.lower() in ("stop", "estop", "e-stop"):
+                estop.trigger("operator typed 'stop'")
+                print("  ■ Emergency stop armed. No further plan will execute "
+                      "until you type 'resume'.\n")
+                continue
+            if instruction.lower() in ("resume", "clear"):
+                estop.clear()
+                print("  Emergency stop cleared.\n")
                 continue
             if instruction.lower() == "reset" and sim is not None:
                 sim.reset()
                 print("  Scene reset to initial positions.\n")
                 continue
-            run_pipeline(instruction, verbose=True, tracker=tracker, sim=sim)
+            run_pipeline(instruction, verbose=True, tracker=tracker, sim=sim,
+                         emergency_stop=estop)
 
         except KeyboardInterrupt:
             print("\nGoodbye!")

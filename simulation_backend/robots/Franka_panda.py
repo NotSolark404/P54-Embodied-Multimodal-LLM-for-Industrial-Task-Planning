@@ -482,15 +482,27 @@ class FrankaPanda(RobotBase):
 
     def _workspace_bounds(self) -> tuple[tuple, tuple]:
         """
-        Franka reach: 855mm from base at [0.0, 0.0, 0.0].
-        Blocks at x=[0.30, 0.60], y=[-0.20, 0.20].
-        Trays at x=0.65, y=[-0.45, 0.45].
-        Bounds cover all objects plus transit height.
+        The box the TCP is allowed inside, from the shared project limits.
+
+        Franka Panda reach is 855 mm from a base at [0, 0, 0], so the reach limit
+        is widened from the project default before the box is returned. The box
+        itself comes from the table in scene_config.yaml rather than the
+        hardcoded ((0.10, -0.90, 0.00), (0.90, 0.90, 0.60)) this method used to
+        return, which permitted |y| up to 0.90 m on a table that ends at 0.75 m.
         """
-        return (
-            ( 0.10, -0.90,  0.00),
-            ( 0.90,  0.90,  0.60),
-        )
+        return self._safety_limits().as_bounds()
+
+    def _safety_limits(self):
+        """Shared WorkspaceLimits with Franka's own 0.855 m reach substituted in."""
+        limits = getattr(self, "_limits_cache", None)
+        if limits is None:
+            import dataclasses
+            from task_planner.safety import default_limits
+            limits = dataclasses.replace(
+                default_limits(), reach_m=0.855, source="scene_config + Franka reach",
+            )
+            self._limits_cache = limits
+        return limits
 
     # ── private helpers ───────────────────────────────────────────────────────
 

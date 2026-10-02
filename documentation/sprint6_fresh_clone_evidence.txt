@@ -1,0 +1,22 @@
+P54 — Sprint 6 (S6-10) fresh-clone verification
+Date: 2026-10-02 17:56 UTC
+Clone: Kaveesha_Sprint_6_Safety @ 6944e92
+
+No .env, no cached __pycache__, no LLM cache — nothing carried over.
+  .env files present: 0
+
+$ pytest tests/ -q -m "not integration"   (the command the README gives)
+........................................................................ [ 37%]
+........................................................................ [ 75%]
+...............................................                          [100%]
+191 passed, 23 deselected in 0.45s
+
+$ python helper_scripts/demo_safety.py   (last 8 lines)
+==============================================================================
+  SUMMARY
+==============================================================================
+  Plans executed        : 3
+  Plans refused         : 2  (no command sent in either case)
+  Emergency stop        : halted at a command boundary, 1 step(s) left completed
+  Workspace definitions : 1  (was 4 — MockRobot, RobotBase, Kuka_IIWA, Franka_panda)
+==============================================================================

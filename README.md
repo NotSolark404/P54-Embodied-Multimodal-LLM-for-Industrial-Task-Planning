@@ -84,13 +84,14 @@ P54-Embodied-Multimodal-LLM-for-Industrial-Task-Planning/
 │
 ├── task_planner/                        ← Task planning module
 │   ├── __init__.py
-│   └── planner.py                       ← Rule-based planner with spatial relations
+│   ├── planner.py                       ← Rule-based planner with spatial relations
+│   └── safety.py                         ← Workspace limits, pre-execution plan check, emergency stop
 │
 ├── simulation_backend/                  ← Execution + live vision module
 │   ├── __init__.py
 │   ├── action_schema.py                 ← RobotCommand, ActionPlan Pydantic schemas
 │   ├── mock_robot.py                    ← MockRobot simulator (no PyBullet arm required)
-│   ├── executor.py                      ← Runs ActionPlan step by step
+│   ├── executor.py                      ← Runs ActionPlan step by step; refuses an unsafe plan before it starts
 │   ├── simulation.py                    ← Owns the PyBullet session; picks robot via ROBOT_MODEL
 │   ├── scene_config.yaml                ← Workspace/object/robot layout config
 │   ├── URDF_DOCUMENTATION.md            ← URDF asset authorship & licensing notes
@@ -120,10 +121,11 @@ P54-Embodied-Multimodal-LLM-for-Industrial-Task-Planning/
 │
 ├── helper_scripts/                      ← Standalone utility scripts, run independently of the main pipeline
 │
-├── tests/                               ← Test suite (152 tests total)
+├── tests/                               ← Test suite (214 tests total)
 │   ├── test_llm_module.py               ← 40 tests (28 unit + 12 integration)
-│   ├── test_sprint2.py                  ← 38 unit tests
+│   ├── test_sprint2.py                  ← 40 unit tests
 │   ├── test_multi_action.py             ← 42 tests (33 unit + 9 integration)
+│   ├── test_safety.py                   ← 60 unit tests
 │   ├── integration_tests.py             ← 31 tests (29 unit + 2 integration)
 │   └── test_real_vision_adapter.py      ← 1 unit test
 │
@@ -171,6 +173,8 @@ OLLAMA_BASE_URL=http://localhost:11434
 SIMULATION_MODE=DIRECT         # DIRECT (headless) | GUI (visual debug window)
 VISION_DETECTOR=yolo           # empty (ground truth only) | colour | yolo
 ROBOT_MODEL=mock               # mock | franka | kuka  (ur5 not yet implemented)
+SAFETY_CHECK=on                # on | off — off disables the pre-execution workspace check.
+                               # Simulation comparison only. Never with a physical arm.
 ```
 
 Each team member uses their own `.env` with their own keys. The `.env` file is in `.gitignore` and is never committed.
@@ -219,7 +223,7 @@ python main.py "pick up the red block and place it in the left tray"      # sing
 python main.py --interactive                                              # interactive mode
 python main.py --quiet "locate the yellow block"                          # minimal output
 ```
-In interactive mode: type any instruction at the prompt, `status` for the tracker summary, `reset` to reset the scene, `quit` to exit.
+In interactive mode: type any instruction at the prompt, `status` for the tracker summary, `reset` to reset the scene, `stop` to arm the emergency stop, `resume` to clear it, `quit` to exit.
 
 ### Switch model without changing code
 Set `LLM_BACKEND` in `.env` (`openai | gemini | deepseek | ollama`), then run normally.
@@ -233,6 +237,135 @@ python main.py "move the green block to the left tray and then move the yellow b
 python main.py "put that thing over there"                                                                 # ambiguous — exits gracefully at Stage 1
 python main.py "PICK UP THE RED BLOCK AND PLACE IT IN THE LEFT TRAY"                                        # edge case — all caps normalised
 ```
+
+---
+
+## Safety
+
+Every plan is checked against the physical limits of the workspace before the
+first command reaches a robot. One definition of those limits, in
+`task_planner/safety.py`, read from `simulation_backend/scene_config.yaml`:
+
+| Limit | Value | Source |
+|---|---|---|
+| X | −0.98 m to +0.98 m | table `width_m` 2.0 m, less a 20 mm wall margin |
+| Y | −0.73 m to +0.73 m | table `depth_m` 1.5 m, less a 20 mm wall margin |
+| Z | 0.00 m to 0.60 m | table surface to the transit ceiling |
+| Reach | 0.80 m from the base | KUKA LBR iiwa 7 R800 datasheet reach |
+| Base keep-out | 0.18 m radius | the arm cannot fold into its own base column |
+
+A plan with a target outside those limits is refused whole. The failure names the
+step, the coordinate and the limit that was broken, and no command is sent, so
+the arm is never left half-way through a sequence it was always going to fail.
+Both the box and the reach envelope are applied: a target can be inside the table
+footprint and still be further from the base than the arm is long.
+
+`ROBOT_MODEL=mock | franka | kuka` all share these limits.
+
+**Emergency stop.** In interactive mode, `stop` arms a software stop and `resume`
+clears it. While a plan is executing, Ctrl-C does the same, and a second Ctrl-C
+kills the process outright; the handler is installed around execution only, so
+Ctrl-C at the prompt still quits the program. A stop halts the plan at the next
+command boundary, so a motion already under way completes rather than being cut
+off. This is a secondary measure —
+**the hardware emergency stop on the robot cell is the primary one.** The
+procedure for physical runs is in
+[`documentation/SAFETY_PROCEDURE.md`](documentation/SAFETY_PROCEDURE.md) and must
+be read before any run that moves a real arm.
+
+```bash
+python helper_scripts/demo_safety.py     # the check and the stop, demonstrated
+pytest tests/test_safety.py -v           # 60 tests, no API key needed
+SAFETY_CHECK=off python main.py "..."    # check disabled — simulation only
+```
+
+`SAFETY_CHECK=off` exists for comparing against the pre-Sprint-6 pipeline and
+logs a warning each time it is used. Never set it with a physical arm connected.
+
+---
+
+## Physical Robot Operation
+
+**Status: in progress during Sprint 6.** The sections below describe what is in
+the repository today and what is not, so nobody sets up a lab session expecting
+something that has not been written yet. Each gap names the ticket that closes
+it.
+
+### Camera
+
+The pipeline currently reads one camera, and it is the simulated one.
+`simulation_backend/vision/camera.py` wraps `p.getCameraImage()` and nothing
+else. There is no `cv2.VideoCapture`, no RealSense or other depth-camera SDK, and
+no code path that opens a physical device.
+
+This matters more than it looks. In `yolo_detector.py` the YOLO model supplies a
+bounding box, and the label and the 3D position are then both looked up from
+PyBullet's segmentation mask and body registry — `box.cls` is never read. On a
+real camera there is no segmentation mask and no registry, so `detect()` returns
+an empty list. The detector is not a real-camera detector with the camera
+swapped out; the 3D half of it does not exist yet.
+
+**Owner: Dinith (S6-1, S6-2).** Real camera capture, and a detector that derives
+label and position from the image rather than from the simulator.
+
+### Calibration
+
+Not implemented. There is no camera-intrinsics file, no `solvePnP`, no ArUco or
+checkerboard routine, and no camera-to-robot transform anywhere in the
+repository. Pixel coordinates cannot currently be turned into robot coordinates
+by any code in this project.
+
+**Owner: Dinith (S6-2).** Intrinsics, the camera-to-base transform, the
+calibration procedure written down, and a measured accuracy figure.
+
+### Real robot execution
+
+Two environment variables select a robot, and they are read in different places
+by different code:
+
+| Variable | Read in | Values | Effect |
+|---|---|---|---|
+| `ROBOT_MODEL` | `simulation_backend/simulation.py` | `mock`, `franka`, `kuka` | builds the robot the pipeline actually drives. `ur5` is not implemented and falls back to `MockRobot` |
+| `ROBOT_BACKEND` | `main.py` (module level) | `mock`, `ros`, `real` | builds an object at import time that the pipeline does not currently use |
+
+`simulation_backend/robots/ros_robot.py` exists but is not wired into the live
+pipeline. A 323-line `simulation_backend/real_robot.py` exists on the
+`lakshit_sprint_3` branch and has not been merged. Nothing in the repository has
+been run against a physical arm.
+
+**Owner: Lakshit (S6-4, S6-5), with the two selectors collapsed into one as part
+of it.** Until that lands, `ROBOT_MODEL=kuka` in simulation is the closest thing
+to a physical run, and the safety check above applies identically to both.
+
+### Lab Docker stack
+
+`docker-compose.lab.yml` and `Dockerfile.lab` target the Swinburne lab's ROS2
+setup. The compose file is written and has never been run in the lab.
+
+```bash
+docker compose -f docker-compose.lab.yml build
+docker compose -f docker-compose.lab.yml up -d ollama
+docker compose -f docker-compose.lab.yml exec ollama ollama pull qwen2.5:7b
+docker compose -f docker-compose.lab.yml run --rm p54_ros \
+    python main.py "pick up the red block and place it in the left tray"
+```
+
+What the file sets, and why:
+
+- `network_mode: host` — ROS2 uses DDS multicast for peer discovery, which does
+  not cross a Docker bridge network. The container has to share the host's
+  network stack to see the robot on the lab LAN.
+- `OLLAMA_BASE_URL=http://localhost:11434` — on the host network stack, compose
+  DNS does not resolve the service name `ollama`, so this points at the port the
+  `ollama` service publishes to the host.
+- `LLM_BACKEND=ollama` — the lab machine runs the model locally, so no API key
+  and no outbound internet are needed.
+- `ROS_DOMAIN_ID=0` — must match whatever the robot controller is set to. Check
+  this before the first run; a mismatch looks exactly like a network fault.
+- `platform: linux/amd64` — will not run on Apple Silicon.
+
+**Owner: Lakshit (S6-5).** First lab run, and this section replaced with what
+actually happened.
 
 ---
 
@@ -304,7 +437,7 @@ Validates task completion, logs all 5 stages to `task_log.json` with a unique `t
 ```bash
 pytest tests/ -v -m "not integration"
 ```
-Expected: **129 passed, 23 deselected**
+Expected: **191 passed, 23 deselected**
 
 ### Integration-style tests that still don't need an API key
 ```bash
@@ -315,12 +448,13 @@ pytest tests/integration_tests.py -v -m "not integration"
 ```bash
 pytest tests/ -v
 ```
-152 tests total (129 unit + 23 marked `integration`), spread across `test_llm_module.py`, `test_sprint2.py`, `test_multi_action.py`, `integration_tests.py`, and `test_real_vision_adapter.py`.
+214 tests total (191 unit + 23 marked `integration`), spread across `test_llm_module.py`, `test_sprint2.py`, `test_multi_action.py`, `test_safety.py`, `integration_tests.py`, and `test_real_vision_adapter.py`.
 
 ### Single test class
 ```bash
 pytest tests/integration_tests.py::TestSpatialRelationPlanning -v
 pytest tests/test_sprint2.py::TestMockRobot -v
+pytest tests/test_safety.py::TestExecutorSafetyGate -v
 ```
 
 ---
@@ -330,11 +464,12 @@ pytest tests/test_sprint2.py::TestMockRobot -v
 | File | Tests | Unit (no API) | Marked `integration` (needs API) |
 |---|---|---|---|
 | `tests/test_llm_module.py` | 40 | 28 | 12 |
-| `tests/test_sprint2.py` | 38 | 38 | 0 |
+| `tests/test_sprint2.py` | 40 | 40 | 0 |
 | `tests/test_multi_action.py` | 42 | 33 | 9 |
+| `tests/test_safety.py` | 60 | 60 | 0 |
 | `tests/integration_tests.py` | 31 | 29 | 2 |
 | `tests/test_real_vision_adapter.py` | 1 | 1 | 0 |
-| **Total** | **152** | **129** | **23** |
+| **Total** | **214** | **191** | **23** |
 
 ---
 

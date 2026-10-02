@@ -1,0 +1,127 @@
+
+==============================================================================
+  S6-9 — PRE-EXECUTION SAFETY CHECK
+==============================================================================
+  Limits source : simulation_backend/scene_config.yaml
+  Limits        : X [-0.98, 0.98] m, Y [-0.73, 0.73] m, Z [0.00, 0.60] m, reach 0.80 m from base (0.0, 0.0, 0.0)
+  Table         : 2.0 m x 1.5 m, centred on the robot base, 20 mm wall margin
+
+  Scene object clearance against the arm's reach:
+    red block      (+0.45, -0.20)  radius 0.492 m   margin  +307.6 mm
+    blue block     (+0.25, +0.35)  radius 0.430 m   margin  +369.9 mm
+    green block    (+0.35, +0.12)  radius 0.370 m   margin  +430.0 mm
+    yellow block   (+0.25, -0.35)  radius 0.430 m   margin  +369.9 mm
+    left tray      (+0.65, +0.45)  radius 0.791 m   margin    +9.4 mm
+    right tray     (+0.65, -0.45)  radius 0.791 m   margin    +9.4 mm
+    workstation    (+0.80, +0.00)  radius 0.800 m   margin    +0.0 mm
+
+==============================================================================
+  SAFE-1  —  "pick up the red block and put it in the right tray"
+==============================================================================
+  Plan: 5 steps
+    Step 1: LOCATE 'red block'
+    Step 2: MOVE 'red block' → (0.45, -0.2)
+    Step 3: PICK 'red block'
+    Step 4: MOVE 'right tray' → (0.65, -0.45)
+    Step 5: PLACE 'right tray'
+
+  Safety check: 5 steps, 2 positions validated against X [-0.98, 0.98] m, Y [-0.73, 0.73] m, Z [0.00, 0.60] m, reach 0.80 m from base (0.0, 0.0, 0.0)
+    PASS - plan is inside the workspace.
+
+  Executor verdict  : completed
+  Steps completed   : 5 / 5
+  Arm position      : (0.0, 0.0) -> (0.65, -0.45)
+
+==============================================================================
+  SAFE-2  —  "move the blue block to the left tray"
+==============================================================================
+  Plan: 5 steps
+    Step 1: LOCATE 'blue block'
+    Step 2: MOVE 'blue block' → (0.25, 0.35)
+    Step 3: PICK 'blue block'
+    Step 4: MOVE 'left tray' → (0.65, 0.45)
+    Step 5: PLACE 'left tray'
+
+  Safety check: 5 steps, 2 positions validated against X [-0.98, 0.98] m, Y [-0.73, 0.73] m, Z [0.00, 0.60] m, reach 0.80 m from base (0.0, 0.0, 0.0)
+    PASS - plan is inside the workspace.
+
+  Executor verdict  : completed
+  Steps completed   : 5 / 5
+  Arm position      : (0.0, 0.0) -> (0.65, 0.45)
+
+==============================================================================
+  SAFE-3  —  "place the green block to the left of the blue block"
+==============================================================================
+  Plan: 5 steps
+    Step 1: LOCATE 'green block'
+    Step 2: MOVE 'green block' → (0.35, 0.12)
+    Step 3: PICK 'green block'
+    Step 4: MOVE 'blue block' → (0.25, 0.5)
+    Step 5: PLACE 'blue block'
+
+  Safety check: 5 steps, 2 positions validated against X [-0.98, 0.98] m, Y [-0.73, 0.73] m, Z [0.00, 0.60] m, reach 0.80 m from base (0.0, 0.0, 0.0)
+    PASS - plan is inside the workspace.
+
+  Executor verdict  : completed
+  Steps completed   : 5 / 5
+  Arm position      : (0.0, 0.0) -> (0.25, 0.35)
+
+==============================================================================
+  UNSAFE-1  —  "put the yellow block on the stray pallet (9 m off the table)"
+==============================================================================
+  Scene has an extra object: stray pallet at (9.0, 9.0)
+  Plan: 5 steps
+    Step 1: LOCATE 'yellow block'
+    Step 2: MOVE 'yellow block' → (0.25, -0.35)
+    Step 3: PICK 'yellow block'
+    Step 4: MOVE 'stray pallet' → (9.0, 9.0)
+    Step 5: PLACE 'stray pallet'
+
+  Safety check: 5 steps, 2 positions validated against X [-0.98, 0.98] m, Y [-0.73, 0.73] m, Z [0.00, 0.60] m, reach 0.80 m from base (0.0, 0.0, 0.0)
+    BLOCKED - 1 unsafe target(s), no motion was started:
+      - Step 4 (MOVE) at (9.000, 9.000, 0.000): X=9.000 m is beyond the workspace maximum 0.980 m
+
+  Executor verdict  : refused / failed
+  Steps completed   : 0 / 5
+  Arm position      : (0.0, 0.0) -> (0.0, 0.0)   (did not move)
+  Reason            : Blocked by the pre-execution safety check: Step 4 (MOVE) at (9.000, 9.000, 0.000): X=9.000 m is beyond the workspace maximum 0.980 m
+
+==============================================================================
+  UNSAFE-2  —  "put the red block to the left of the workstation"
+==============================================================================
+  Plan: 5 steps
+    Step 1: LOCATE 'red block'
+    Step 2: MOVE 'red block' → (0.45, -0.2)
+    Step 3: PICK 'red block'
+    Step 4: MOVE 'workstation' → (0.8, 0.15)
+    Step 5: PLACE 'workstation'
+
+  Safety check: 5 steps, 2 positions validated against X [-0.98, 0.98] m, Y [-0.73, 0.73] m, Z [0.00, 0.60] m, reach 0.80 m from base (0.0, 0.0, 0.0)
+    BLOCKED - 1 unsafe target(s), no motion was started:
+      - Step 4 (MOVE) at (0.800, 0.150, 0.000): target is 0.814 m from the robot base, past the 0.800 m reach of the arm
+
+  Executor verdict  : refused / failed
+  Steps completed   : 0 / 5
+  Arm position      : (0.0, 0.0) -> (0.0, 0.0)   (did not move)
+  Reason            : Blocked by the pre-execution safety check: Step 4 (MOVE) at (0.800, 0.150, 0.000): target is 0.814 m from the robot base, past the 0.800 m reach of the arm
+
+==============================================================================
+  ESTOP-1  —  stop raised while step 1 of a five-step plan was running
+==============================================================================
+  Plan steps        : 5
+  Steps completed   : 1
+  Halted before step: 2
+  Stopped flag      : True
+  Reason            : Emergency stop before step 2: operator pressed the stop while step 1 was running
+  Held object       : None
+
+  The step that was already running finished. Nothing after it ran.
+
+==============================================================================
+  SUMMARY
+==============================================================================
+  Plans executed        : 3
+  Plans refused         : 2  (no command sent in either case)
+  Emergency stop        : halted at a command boundary, 1 step(s) left completed
+  Workspace definitions : 1  (was 4 — MockRobot, RobotBase, Kuka_IIWA, Franka_panda)
+==============================================================================

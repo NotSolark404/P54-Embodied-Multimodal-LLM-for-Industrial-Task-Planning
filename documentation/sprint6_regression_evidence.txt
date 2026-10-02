@@ -1,0 +1,46 @@
+P54 — Sprint 6 (S6-10) full regression run
+Date: 2026-10-02 16:50 UTC
+Branch: Kaveesha_Sprint_6_Safety
+Python: Python 3.11.15
+
+$ pytest -m "not integration" -q
+
+........................................................................ [ 37%]
+........................................................................ [ 75%]
+...............................................                          [100%]
+191 passed, 23 deselected in 0.42s
+
+$ pytest --collect-only -q | tail -1
+
+214 tests collected in 0.23s
+
+Per file:
+  tests/test_llm_module.py               28 passed, 12 deselected in 0.10s
+  tests/test_sprint2.py                  40 passed in 0.14s
+  tests/test_multi_action.py             33 passed, 9 deselected in 0.17s
+  tests/test_safety.py                   60 passed in 0.24s
+  tests/integration_tests.py             29 passed, 2 deselected in 0.14s
+  tests/test_real_vision_adapter.py      1 passed in 0.08s
+
+==============================================================================
+BASELINE: the same command on main, before S6-9 / S6-10
+==============================================================================
+
+$ git -C <clone of main> log --oneline -1
+b9a64a9 Merge branch 'main' of https://github.com/solarkMelb/P54-Embodied-Multimodal-LLM-for-Industrial-Task-Planning
+
+$ pytest -m "not integration" -q
+
+llm_backend/backends/deepseek_backend.py:37: ModuleNotFoundError
+=========================== short test summary info ============================
+FAILED tests/test_llm_module.py::TestBackendFactory::test_missing_gemini_key_raises
+FAILED tests/test_llm_module.py::TestBackendFactory::test_missing_deepseek_key_raises
+2 failed, 127 passed, 23 deselected in 1.01s
+
+Note: the failure count depends on which optional LLM backend packages happen
+to be installed. This machine has langchain_openai but not langchain_google_genai
+or langchain_deepseek, so two of the three fail here; on a machine with none of
+the three installed, all three fail. That environment dependence is the defect:
+build_llm() imported the SDK before checking for the API key, so a missing key
+was reported as a missing package, and which tests failed depended on what was
+installed rather than on what was wrong.
