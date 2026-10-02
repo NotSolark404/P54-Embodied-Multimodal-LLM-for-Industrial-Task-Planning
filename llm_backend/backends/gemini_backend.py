@@ -22,16 +22,17 @@ logger = logging.getLogger(__name__)
 
 def build_llm():
     """Return an initialised ChatGoogleGenerativeAI instance."""
-    from langchain_google_genai import ChatGoogleGenerativeAI
-
     api_key = os.getenv("GEMINI_API_KEY")
     model   = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
     temp    = float(os.getenv("GEMINI_TEMPERATURE", "0.0"))
 
+    # Key first, SDK second — see openai_backend.py for why.
     if not api_key:
         raise EnvironmentError(
             "GEMINI_API_KEY not found. Add it to your .env file."
         )
+
+    from langchain_google_genai import ChatGoogleGenerativeAI
 
     logger.info(f"[Gemini backend] model={model}, temperature={temp}")
     return ChatGoogleGenerativeAI(

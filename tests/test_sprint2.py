@@ -28,15 +28,25 @@ from task_planner.planner import TaskPlanner
 
 @pytest.fixture
 def sample_scene():
+    """
+    The scene as scene_config.yaml defines it, in metres.
+
+    S6-10: this fixture used to describe an invented ten-metre workspace — the
+    red block at (2.5, 1.0), the right tray at (8.0, 1.0) — from before the
+    project settled on metres and a 2.0 x 1.5 m table. Those coordinates are now
+    outside the validated workspace, so a suite built on them passed while
+    testing a world the lab arm will never see. The positions below are the ones
+    in simulation_backend/scene_config.yaml.
+    """
     return {
         "objects": [
-            {"label": "red block",    "position": (2.5, 1.0)},
-            {"label": "blue block",   "position": (3.0, 2.0)},
-            {"label": "green block",  "position": (1.5, 3.0)},
-            {"label": "yellow block", "position": (4.0, 2.5)},
-            {"label": "left tray",    "position": (6.0, 1.0)},
-            {"label": "right tray",   "position": (8.0, 1.0)},
-            {"label": "workstation",  "position": (5.0, 5.0)},
+            {"label": "red block",    "position": (0.45, -0.20)},
+            {"label": "blue block",   "position": (0.25,  0.35)},
+            {"label": "green block",  "position": (0.35,  0.12)},
+            {"label": "yellow block", "position": (0.25, -0.35)},
+            {"label": "left tray",    "position": (0.65,  0.45)},
+            {"label": "right tray",   "position": (0.65, -0.45)},
+            {"label": "workstation",  "position": (0.80,  0.00)},
         ]
     }
 
@@ -153,19 +163,40 @@ class TestMockRobot:
         assert "red block" in obj_map
 
     def test_move_to_valid_position(self, loaded_robot):
-        result = loaded_robot.move_to(3.0, 2.0)
+        result = loaded_robot.move_to(0.35, 0.12)
         assert result.success is True
-        assert loaded_robot.get_position() == (3.0, 2.0)
+        assert loaded_robot.get_position() == (0.35, 0.12)
 
     def test_move_to_out_of_bounds(self, loaded_robot):
         result = loaded_robot.move_to(99.0, 99.0)
         assert result.success is False
-        assert "outside workspace" in result.message
+        assert "beyond the workspace maximum" in result.message
+
+    def test_move_to_negative_y_is_allowed(self, loaded_robot):
+        """
+        S6-9 regression. The old check was `0 <= y <= 10`, which refused every
+        object on the robot's right — the right tray at y = -0.45 and the red
+        block at y = -0.20 — while accepting a target nine metres off the table.
+        """
+        assert loaded_robot.move_to(0.65, -0.45).success is True
+
+    def test_move_to_object_is_boundary_checked(self, loaded_robot):
+        """
+        S6-9 regression. move_to_object() used to set the arm position directly,
+        with no boundary check, and the Executor routes every planned MOVE
+        through it, so the check in move_to() was never reached in a real run.
+        """
+        loaded_robot.load_scene({
+            "objects": [{"label": "stray block", "position": (9.0, 9.0)}]
+        })
+        result = loaded_robot.move_to_object("stray block")
+        assert result.success is False
+        assert "not reachable" in result.message
 
     def test_move_to_object(self, loaded_robot):
         result = loaded_robot.move_to_object("red block")
         assert result.success is True
-        assert loaded_robot.get_position() == (2.5, 1.0)
+        assert loaded_robot.get_position() == (0.45, -0.20)
 
     def test_move_to_unknown_object(self, loaded_robot):
         result = loaded_robot.move_to_object("purple block")
@@ -204,7 +235,7 @@ class TestMockRobot:
     def test_locate_success(self, loaded_robot):
         result = loaded_robot.locate("yellow block")
         assert result.success is True
-        assert "4.0" in result.message or "4" in result.message
+        assert "0.25" in result.message and "-0.35" in result.message
 
     def test_locate_unknown_object(self, loaded_robot):
         result = loaded_robot.locate("purple block")
@@ -226,7 +257,7 @@ class TestMockRobot:
         assert loaded_robot.get_object_map() == {}
 
     def test_command_log_grows(self, loaded_robot):
-        loaded_robot.move_to(1.0, 1.0)
+        loaded_robot.move_to(0.45, -0.20)
         loaded_robot.pick("red block")
         assert len(loaded_robot.get_command_log()) == 2
 

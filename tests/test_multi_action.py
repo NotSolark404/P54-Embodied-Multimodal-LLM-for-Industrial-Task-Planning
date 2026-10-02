@@ -44,13 +44,18 @@ from simulation_backend.executor import Executor
 def scene():
     return {
         "objects": [
-            {"label": "red block",    "position": (2.5, 1.0)},
-            {"label": "blue block",   "position": (3.0, 2.0)},
-            {"label": "green block",  "position": (1.5, 3.0)},
-            {"label": "yellow block", "position": (4.0, 2.5)},
-            {"label": "left tray",    "position": (6.0, 1.0)},
-            {"label": "right tray",   "position": (8.0, 1.0)},
-            {"label": "workstation",  "position": (5.0, 5.0)},
+            # S6-10: the real scene_config.yaml positions, in metres. These used
+            # to be an invented ten-metre workspace (red block at (2.5, 1.0),
+            # right tray at (8.0, 1.0)) left over from before the project settled
+            # on metres and a 2.0 x 1.5 m table, so every execution test ran in a
+            # workspace the robot does not have.
+            {"label": "red block",    "position": (0.45, -0.20)},
+            {"label": "blue block",   "position": (0.25,  0.35)},
+            {"label": "green block",  "position": (0.35,  0.12)},
+            {"label": "yellow block", "position": (0.25, -0.35)},
+            {"label": "left tray",    "position": (0.65,  0.45)},
+            {"label": "right tray",   "position": (0.65, -0.45)},
+            {"label": "workstation",  "position": (0.80,  0.00)},
         ]
     }
 
@@ -243,8 +248,8 @@ class TestMultiActionPlanning:
             and c.target_position is not None
         ]
         assert len(moves_to_block) == 2
-        assert moves_to_block[0].target_position.as_tuple()[:2] == (2.5, 1.0)
-        assert moves_to_block[1].target_position.as_tuple()[:2] == (6.0, 1.0)
+        assert moves_to_block[0].target_position.as_tuple()[:2] == (0.45, -0.20)
+        assert moves_to_block[1].target_position.as_tuple()[:2] == (0.65,  0.45)
 
     def test_instruction_string_records_every_action(self, planner, scene):
         actions = [

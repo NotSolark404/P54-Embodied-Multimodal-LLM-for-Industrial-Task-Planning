@@ -34,17 +34,18 @@ logger = logging.getLogger(__name__)
 
 def build_llm():
     """Return an initialised ChatDeepSeek instance."""
-    from langchain_deepseek import ChatDeepSeek
-
     api_key = os.getenv("DEEPSEEK_API_KEY")
     model   = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
     temp    = float(os.getenv("DEEPSEEK_TEMPERATURE", "0.0"))
 
+    # Key first, SDK second — see openai_backend.py for why.
     if not api_key:
         raise EnvironmentError(
             "DEEPSEEK_API_KEY not found. "
             "Sign up at platform.deepseek.com and add the key to your .env file."
         )
+
+    from langchain_deepseek import ChatDeepSeek
 
     if model == "deepseek-reasoner":
         logger.warning(
