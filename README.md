@@ -121,11 +121,11 @@ P54-Embodied-Multimodal-LLM-for-Industrial-Task-Planning/
 │
 ├── helper_scripts/                      ← Standalone utility scripts, run independently of the main pipeline
 │
-├── tests/                               ← Test suite (200 tests total)
+├── tests/                               ← Test suite (214 tests total)
 │   ├── test_llm_module.py               ← 40 tests (28 unit + 12 integration)
 │   ├── test_sprint2.py                  ← 40 unit tests
 │   ├── test_multi_action.py             ← 42 tests (33 unit + 9 integration)
-│   ├── test_safety.py                   ← 46 unit tests
+│   ├── test_safety.py                   ← 60 unit tests
 │   ├── integration_tests.py             ← 31 tests (29 unit + 2 integration)
 │   └── test_real_vision_adapter.py      ← 1 unit test
 │
@@ -275,7 +275,7 @@ be read before any run that moves a real arm.
 
 ```bash
 python helper_scripts/demo_safety.py     # the check and the stop, demonstrated
-pytest tests/test_safety.py -v           # 46 tests, no API key needed
+pytest tests/test_safety.py -v           # 60 tests, no API key needed
 SAFETY_CHECK=off python main.py "..."    # check disabled — simulation only
 ```
 
@@ -437,7 +437,7 @@ Validates task completion, logs all 5 stages to `task_log.json` with a unique `t
 ```bash
 pytest tests/ -v -m "not integration"
 ```
-Expected: **177 passed, 23 deselected**
+Expected: **191 passed, 23 deselected**
 
 ### Integration-style tests that still don't need an API key
 ```bash
@@ -448,7 +448,7 @@ pytest tests/integration_tests.py -v -m "not integration"
 ```bash
 pytest tests/ -v
 ```
-200 tests total (177 unit + 23 marked `integration`), spread across `test_llm_module.py`, `test_sprint2.py`, `test_multi_action.py`, `test_safety.py`, `integration_tests.py`, and `test_real_vision_adapter.py`.
+214 tests total (191 unit + 23 marked `integration`), spread across `test_llm_module.py`, `test_sprint2.py`, `test_multi_action.py`, `test_safety.py`, `integration_tests.py`, and `test_real_vision_adapter.py`.
 
 ### Single test class
 ```bash
@@ -466,10 +466,10 @@ pytest tests/test_safety.py::TestExecutorSafetyGate -v
 | `tests/test_llm_module.py` | 40 | 28 | 12 |
 | `tests/test_sprint2.py` | 40 | 40 | 0 |
 | `tests/test_multi_action.py` | 42 | 33 | 9 |
-| `tests/test_safety.py` | 46 | 46 | 0 |
+| `tests/test_safety.py` | 60 | 60 | 0 |
 | `tests/integration_tests.py` | 31 | 29 | 2 |
 | `tests/test_real_vision_adapter.py` | 1 | 1 | 0 |
-| **Total** | **200** | **177** | **23** |
+| **Total** | **214** | **191** | **23** |
 
 ---
 

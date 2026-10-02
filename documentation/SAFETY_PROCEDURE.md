@@ -168,7 +168,7 @@ and tell the team so this file can be corrected.
 | What | Where |
 |---|---|
 | Pre-execution check and emergency stop demonstrated | `documentation/sprint6_safety_evidence.txt` |
-| Tests, including every rejection case | `tests/test_safety.py`, 46 tests |
+| Tests, including every rejection case | `tests/test_safety.py`, 60 tests |
 | Guard implementation | `task_planner/safety.py` |
 | Pre-flight gate and stop polling | `simulation_backend/executor.py` |
 

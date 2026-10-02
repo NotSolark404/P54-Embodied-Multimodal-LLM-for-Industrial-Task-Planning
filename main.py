@@ -49,7 +49,7 @@ from simulation_backend.vision.scene_representation import get_current_scene
 from simulation_backend.mock_robot import MockRobot
 from simulation_backend.executor   import Executor
 from simulation_backend.action_schema import plan_to_commands
-from task_planner.safety          import EmergencyStop, default_limits
+from task_planner.safety          import EmergencyStop, limits_from_env
 # force=True: importing custom_LLM_parser above already called basicConfig at
 # INFO, and the first call wins. Without force this is a silent no-op and every
 # run prints the library's INFO logs instead of the WARNING level asked for here.
@@ -107,17 +107,11 @@ def _safety_limits_for_run():
     """
     The workspace limits the pre-execution safety check uses (S6-9).
 
-    Read from scene_config.yaml. Set SAFETY_CHECK=off to run without the check,
-    which is only for comparing behaviour against the pre-Sprint-6 pipeline and
-    must never be used with a real arm.
+    Read from scene_config.yaml, unless SAFETY_CHECK=off. The switch itself
+    lives in task_planner.safety next to the check it disables; see
+    limits_from_env().
     """
-    if os.getenv("SAFETY_CHECK", "on").lower() in ("off", "0", "false", "no"):
-        logger.warning(
-            "[safety] SAFETY_CHECK=off - the pre-execution workspace check is "
-            "DISABLED. Do not run a physical robot in this mode."
-        )
-        return None
-    return default_limits()
+    return limits_from_env()
 
 
 # ── Pipeline ───────────────────────────────────────────────────────────────────

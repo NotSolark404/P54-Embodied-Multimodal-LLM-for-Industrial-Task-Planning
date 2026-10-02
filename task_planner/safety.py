@@ -459,6 +459,29 @@ def default_limits() -> WorkspaceLimits:
 _DEFAULT_LIMITS: Optional[WorkspaceLimits] = None
 
 
+def limits_from_env() -> Optional[WorkspaceLimits]:
+    """
+    The limits the pipeline should use, or None when the check is switched off.
+
+    SAFETY_CHECK=off (or 0, false, no) disables the pre-execution check. It
+    exists only for comparing behaviour against the pre-Sprint-6 pipeline, logs
+    a warning every time it is read, and must never be set with a physical arm
+    connected. Anything else, including the variable being unset, leaves the
+    check on.
+
+    This lives next to the check rather than in main.py so the switch and the
+    thing it switches off cannot drift apart, and so it can be tested without
+    importing the whole pipeline.
+    """
+    if os.getenv("SAFETY_CHECK", "on").strip().lower() in ("off", "0", "false", "no"):
+        logger.warning(
+            "[safety] SAFETY_CHECK=off - the pre-execution workspace check is "
+            "DISABLED. Do not run a physical robot in this mode."
+        )
+        return None
+    return default_limits()
+
+
 def unsafe_positions(positions: Iterable[tuple], limits: Optional[WorkspaceLimits] = None):
     """
     Check loose coordinates rather than a plan. Used by the vision and planner

@@ -36,6 +36,7 @@ from task_planner.safety import (
     WorkspaceLimits,
     assert_plan_safe,
     default_limits,
+    limits_from_env,
     unsafe_positions,
     validate_plan,
 )
@@ -366,6 +367,73 @@ class TestEmergencyStop:
             _plan((0.45, -0.20)), verbose=False,
         )
         assert result.success and not result.stopped
+
+
+# ── 4b. The check covers multi-action plans and can be switched off ────────────
+class TestMultiActionAndTheOffSwitch:
+
+    def test_a_multi_action_plan_is_checked_end_to_end(self):
+        """
+        Sprint 5 chains several actions into one renumbered plan. The gate walks
+        the whole chain, so an unsafe target in the second action stops the first
+        action from running too.
+        """
+        planner = TaskPlanner()
+        scene = {"objects": list(SCENE["objects"]) +
+                            [{"label": "stray pallet", "position": (9.0, 9.0)}]}
+        plan = planner.plan_multi_step(
+            [_parsed(ActionType.PICK, "red block", dest="right tray", relation="in",
+                     raw="put the red block in the right tray"),
+             _parsed(ActionType.PICK, "blue block", dest="stray pallet", relation="in",
+                     raw="put the blue block on the stray pallet")],
+            scene,
+        )
+        robot = MockRobot()
+        robot.load_scene(scene)
+        start = robot.get_position()
+
+        result = Executor(robot, safety_limits=default_limits()).execute(
+            plan, verbose=False,
+        )
+
+        assert result.blocked_by_safety
+        assert robot.get_position() == start
+        assert result.failed_step > 3, "the unsafe target is in the second action"
+
+    def test_a_safe_multi_action_plan_passes(self):
+        planner = TaskPlanner()
+        plan = planner.plan_multi_step(
+            [_parsed(ActionType.PICK, "red block", dest="right tray", relation="in",
+                     raw="put the red block in the right tray"),
+             _parsed(ActionType.PICK, "blue block", dest="left tray", relation="in",
+                     raw="put the blue block in the left tray")],
+            SCENE,
+        )
+        report = validate_plan(plan, default_limits())
+        assert report.ok, report.summary()
+        assert report.positions_checked == 4
+
+    @pytest.mark.parametrize("value", ["off", "OFF", "0", "false", "no", " off "])
+    def test_safety_check_off_disables_the_gate(self, monkeypatch, value):
+        """
+        SAFETY_CHECK=off exists so the pre-Sprint-6 behaviour can be compared
+        against. It has to actually switch the check off.
+        """
+        monkeypatch.setenv("SAFETY_CHECK", value)
+        assert limits_from_env() is None
+
+    @pytest.mark.parametrize("value", ["on", "ON", "true", "yes", "anything else"])
+    def test_anything_else_leaves_the_gate_on(self, monkeypatch, value):
+        """
+        A typo in the variable must not silently disable a safety check. Only the
+        four documented off values turn it off.
+        """
+        monkeypatch.setenv("SAFETY_CHECK", value)
+        assert limits_from_env() is default_limits()
+
+    def test_the_gate_is_on_when_the_variable_is_unset(self, monkeypatch):
+        monkeypatch.delenv("SAFETY_CHECK", raising=False)
+        assert limits_from_env() is default_limits()
 
 
 # ── 5. Robots share one definition of the workspace ────────────────────────────
