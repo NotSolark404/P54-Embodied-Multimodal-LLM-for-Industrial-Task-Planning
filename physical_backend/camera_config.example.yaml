@@ -1,0 +1,9 @@
+# Capture settings only; these are not calibration measurements.
+camera:
+  backend: raspberry_pi
+  camera_num: 0
+  width: 640
+  height: 480
+
+# Requires physical measurement. No intrinsics or transforms are supplied.
+calibration_file: null
