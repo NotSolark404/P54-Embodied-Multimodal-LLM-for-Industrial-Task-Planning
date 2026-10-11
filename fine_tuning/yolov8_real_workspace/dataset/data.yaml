@@ -1,0 +1,9 @@
+# Physical lab classes MUST be confirmed before labelling or training.
+# Do not copy the seven simulation classes without reviewing real lab objects.
+classes_confirmed: false
+names: []
+# Paths are relative to this file; the training script resolves them absolutely.
+path: .
+train: images/train
+val: images/val
+test: images/test

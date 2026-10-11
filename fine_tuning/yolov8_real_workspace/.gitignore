@@ -1,0 +1,4 @@
+# Local real-image training outputs; never replace simulation weights.
+runs/
+*.cache
+**/*.cache
