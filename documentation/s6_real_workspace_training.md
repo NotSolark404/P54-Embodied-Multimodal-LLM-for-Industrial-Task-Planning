@@ -1,10 +1,12 @@
 # S6-2 — real workspace YOLOv8 training preparation
 
-Status: software preparation only. **No real-image training, real-image accuracy
-measurement, physical calibration or camera validation has been completed.**
-The lab has a webcam-like camera; its model, driver and capture requirements remain
-unconfirmed. This workflow consumes image files and does not assume Picamera2 or
-any other camera API. S6-1's Raspberry Pi adapter is not used here.
+Status update: 30 real ZED RTSP left-view images have been collected and an
+initial existing-model baseline has been run. Predictions are unverified and are
+not ground truth. No real-workspace training or calibration has been performed.
+See [current manual annotation workflow](s6_real_image_annotation.md) for the
+confirmed two-class map, pending physical boundary review, revision workflow,
+and conservative single-group split policy. The generic future training steps
+below remain gated by class and annotation confirmation.
 
 ## Existing synthetic assets (unchanged)
 
@@ -37,7 +39,7 @@ All new tooling lives in `fine_tuning/yolov8_real_workspace/`:
 
 ```text
 dataset/
-  data.yaml             # names: [], classes_confirmed: false
+  data.yaml             # two confirmed names; annotations remain unconfirmed
   images/{train,val,test}/
   labels/{train,val,test}/
 validate_dataset.py
@@ -86,7 +88,7 @@ python fine_tuning/yolov8_real_workspace/validate_dataset.py
 python fine_tuning/yolov8_real_workspace/validate_dataset.py --require-test
 ```
 
-The empty scaffold intentionally fails with an unconfirmed-class error. Once classes
+The scaffold currently fails with an unconfirmed-annotations error. Once classes
 are confirmed, checks cover image decoding, empty required splits, missing/orphan
 labels, integer class IDs, finite normalized boxes inside image bounds, class
 coverage in training and identical decoded image content (including across splits).
@@ -139,8 +141,7 @@ weights. Tests cover class confirmation, malformed labels, missing/orphan labels
 corrupt images, duplicate leakage, split requirements, training refusal and output
 isolation. These are software checks only.
 
-Pending: camera identification/setup; real object/class confirmation; real collection,
-annotation and split review; actual YOLOv8 training and held-out evaluation. No
+Pending: physical object identification; annotation and split review; independent validation/test collection; actual YOLOv8 training and held-out evaluation. No
 physical camera integration or simulation-to-physical detector switch is made.
 
 Format/API references: [Ultralytics detection datasets](https://docs.ultralytics.com/datasets/detect/),

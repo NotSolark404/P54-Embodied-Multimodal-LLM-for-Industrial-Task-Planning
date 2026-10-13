@@ -223,3 +223,11 @@ llm_cache
 
 CLAUDE.md
 .claude/
+
+# Local ZED captures and unannotated collection images
+/Cam/raw_images/
+/Cam/test_frame*.jpg
+/Cam/baseline_predictions/
+/fine_tuning/yolov8_real_workspace/annotation_work/
+/fine_tuning/yolov8_real_workspace/dataset/images/**
+!/fine_tuning/yolov8_real_workspace/dataset/images/**/.gitkeep

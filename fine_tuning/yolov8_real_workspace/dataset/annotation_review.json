@@ -1,0 +1,18 @@
+[
+  {
+    "revision": "drafts/zed_left_20261013T032749_877395Z_ca3889d246754eb993529f030f73c64c/20261013T041500_731854Z_140a06f6a089493e8e08d028788fbe29.json",
+    "reviewed": true,
+    "reviewer": "assistant visual review of saved manual annotations",
+    "human_confirmed": false,
+    "reviewed_at_utc": "2026-10-13T04:20:28.499732+00:00",
+    "notes": "Visual inspection: two tray boxes (class 0) and one red component box (class 1). Box coordinates retained."
+  },
+  {
+    "revision": "drafts/zed_left_20261013T032754_812187Z_e5acb499ab914e9c8e5ce3e6e65b7ad4/20261013T042028_500314Z_9fd74e4b3f9e464e984ef7b5c62946f9.json",
+    "reviewed": true,
+    "reviewer": "assistant visual review of saved manual annotations",
+    "human_confirmed": false,
+    "reviewed_at_utc": "2026-10-13T04:20:28.500954+00:00",
+    "notes": "Visual inspection: two tray boxes (class 0) and one red component box (class 1). Box coordinates retained. Corrected box 3 from class 0 to class 1 in a new revision."
+  }
+]

@@ -4,6 +4,7 @@ import argparse
 from collections import Counter
 from dataclasses import dataclass, field
 import hashlib
+import json
 import math
 from pathlib import Path
 
@@ -13,6 +14,25 @@ import yaml
 DEFAULT_DATA = Path(__file__).resolve().parent / "dataset" / "data.yaml"
 SPLITS = ("train", "val", "test")
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp"}
+
+
+def validate_groups(root, images):
+    """Require an audited scene group per image; never split one scene group."""
+    records = json.loads((root / "split_groups.json").read_text())
+    if not isinstance(records, dict) or set(records) != set(images):
+        raise ValueError("Split group manifest must cover exactly every dataset image")
+    assignments = {}
+    for relative, path in images.items():
+        entry = records[relative]
+        group = entry.get("group")
+        if not isinstance(group, str) or not group.strip():
+            raise ValueError("Every image needs a reviewed scene group")
+        if entry.get("sha256") != hashlib.sha256(path.read_bytes()).hexdigest():
+            raise ValueError(f"Split group checksum mismatch: {relative}")
+        split = Path(relative).parts[1]
+        if group in assignments and assignments[group] != split:
+            raise ValueError(f"Scene group split leakage: {group}")
+        assignments[group] = split
 
 
 def class_names(config: dict) -> list[str]:
@@ -83,6 +103,10 @@ def validate_dataset(data: str | Path = DEFAULT_DATA, require_test: bool = False
         if not isinstance(config, dict):
             raise ValueError("Dataset YAML must contain a mapping")
         report.names = class_names(config)
+        if config.get("annotations_confirmed", True) is not True:
+            raise ValueError("Manual annotations require confirmation before dataset acceptance")
+        if config.get("object_definitions_confirmed", True) is not True:
+            raise ValueError("Physical object definitions require confirmation")
         # A deliberately small layout contract, not arbitrary Ultralytics paths/URLs.
         if config.get("path") != "." or any(config.get(s) != f"images/{s}" for s in SPLITS):
             raise ValueError("Use path: . and images/train, images/val, images/test relative to data.yaml")
@@ -91,6 +115,7 @@ def validate_dataset(data: str | Path = DEFAULT_DATA, require_test: bool = False
         return report
 
     seen_images = {}
+    grouped_images = {}
     for split in SPLITS:
         image_dir = report.root / "images" / split
         label_dir = report.root / "labels" / split
@@ -110,6 +135,7 @@ def validate_dataset(data: str | Path = DEFAULT_DATA, require_test: bool = False
             report.errors.append(f"{split}: no images available")
         expected_labels = set()
         for path in images:
+            grouped_images[path.relative_to(report.root).as_posix()] = path
             relative = path.relative_to(image_dir)
             label = label_dir / relative.with_suffix(".txt")
             if label in expected_labels:
@@ -138,6 +164,11 @@ def validate_dataset(data: str | Path = DEFAULT_DATA, require_test: bool = False
             for class_id, name in enumerate(report.names):
                 if not counts[class_id]:
                     report.errors.append(f"train: no labelled instances of class {class_id} ({name})")
+    if config.get("split_groups_required") is True:
+        try:
+            validate_groups(report.root, grouped_images)
+        except (OSError, ValueError, TypeError, AttributeError) as exc:
+            report.errors.append(f"Split groups: {exc}")
     return report
 
 

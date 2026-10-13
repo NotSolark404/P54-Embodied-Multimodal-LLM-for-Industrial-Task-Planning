@@ -1,9 +1,15 @@
 # Physical lab classes MUST be confirmed before labelling or training.
 # Do not copy the seven simulation classes without reviewing real lab objects.
-classes_confirmed: false
-names: []
+classes_confirmed: true
+names: [automatic_pick_tray, electronic_component]
 # Paths are relative to this file; the training script resolves them absolutely.
 path: .
 train: images/train
 val: images/val
 test: images/test
+# Class IDs confirmed by user: 0 = either tray, 1 = electronic component.
+# Physical boundaries and annotation quality still require manual review.
+class_names_approved: true
+object_definitions_confirmed: false
+annotations_confirmed: false
+split_groups_required: true

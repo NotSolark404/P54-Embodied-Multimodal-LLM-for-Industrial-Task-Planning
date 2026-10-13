@@ -1,0 +1,10 @@
+{
+  "images/train/zed_left_20261013T032749_877395Z_ca3889d246754eb993529f030f73c64c.png": {
+    "group": "zed_20261013_scene_01",
+    "sha256": "e927071d175ba369f8def329fcb4755b272176e5c796a0a25dc27c519b927b27"
+  },
+  "images/train/zed_left_20261013T032754_812187Z_e5acb499ab914e9c8e5ce3e6e65b7ad4.png": {
+    "group": "zed_20261013_scene_01",
+    "sha256": "17b27df385cdf1581f8db6668ba0f6fa77f09e42a776c1f758aa0c4cb5c72a47"
+  }
+}

@@ -46,8 +46,8 @@ def test_shipped_dataset_and_training_are_not_ready(monkeypatch, tmp_path):
     monkeypatch.setattr(training, "RUNS", tmp_path / "runs")
     monkeypatch.setitem(sys.modules, "ultralytics", None)
     report = validation.validate_dataset()
-    assert any("requires confirmation" in error for error in report.errors)
-    with pytest.raises(ValueError, match="requires confirmation"):
+    assert any("annotations require confirmation" in error for error in report.errors)
+    with pytest.raises(ValueError, match="annotations require confirmation"):
         training.train()
     assert not training.RUNS.exists()
 
