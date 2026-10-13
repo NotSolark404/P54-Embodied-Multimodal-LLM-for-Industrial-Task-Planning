@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "workspace_id": "fof_table",
+  "status": "preparation_only",
+  "orientation_basis": "reference_photo_only_not_robot_axes",
+  "camera": {
+    "manufacturer": "Stereolabs",
+    "family": "ZED",
+    "model": null,
+    "serial_number": null,
+    "sdk_version": null,
+    "sdk_configuration_record": null
+  },
+  "measurements": {
+    "reference_photo_record": null,
+    "coordinate_frame_record": null,
+    "camera_calibration_record": null,
+    "camera_to_workspace_record": null,
+    "workspace_to_robot_record": null,
+    "lab_validation_record": null
+  },
+  "trays": [
+    {
+      "id": "automatic_pick_1",
+      "name": "Automatic Pick 1",
+      "reference_photo_location": "lower",
+      "boundary": null,
+      "compartments": [
+        {
+          "id": "automatic_pick_1/left_1",
+          "reference_slot": "left_1",
+          "usage": "candidate_pending_lab_confirmation",
+          "pick_allowed": false,
+          "place_allowed": false,
+          "reason": "Intended usable area; requires lab confirmation and measurements",
+          "boundary": null,
+          "valid_pick_region": null,
+          "valid_place_region": null
+        },
+        {
+          "id": "automatic_pick_1/left_2",
+          "reference_slot": "left_2",
+          "usage": "candidate_pending_lab_confirmation",
+          "pick_allowed": false,
+          "place_allowed": false,
+          "reason": "Intended usable area; requires lab confirmation and measurements",
+          "boundary": null,
+          "valid_pick_region": null,
+          "valid_place_region": null
+        },
+        {
+          "id": "automatic_pick_1/right_1",
+          "reference_slot": "right_1",
+          "usage": "prohibited",
+          "pick_allowed": false,
+          "place_allowed": false,
+          "reason": "Raised bumps; never use for picking or placement",
+          "boundary": null,
+          "valid_pick_region": null,
+          "valid_place_region": null
+        },
+        {
+          "id": "automatic_pick_1/right_2",
+          "reference_slot": "right_2",
+          "usage": "prohibited",
+          "pick_allowed": false,
+          "place_allowed": false,
+          "reason": "Raised bumps; never use for picking or placement",
+          "boundary": null,
+          "valid_pick_region": null,
+          "valid_place_region": null
+        }
+      ]
+    },
+    {
+      "id": "automatic_pick_2",
+      "name": "Automatic Pick 2",
+      "reference_photo_location": "upper",
+      "boundary": null,
+      "compartments": [
+        {
+          "id": "automatic_pick_2/left_1",
+          "reference_slot": "left_1",
+          "usage": "candidate_pending_lab_confirmation",
+          "pick_allowed": false,
+          "place_allowed": false,
+          "reason": "Intended usable area; requires lab confirmation and measurements",
+          "boundary": null,
+          "valid_pick_region": null,
+          "valid_place_region": null
+        },
+        {
+          "id": "automatic_pick_2/left_2",
+          "reference_slot": "left_2",
+          "usage": "candidate_pending_lab_confirmation",
+          "pick_allowed": false,
+          "place_allowed": false,
+          "reason": "Intended usable area; requires lab confirmation and measurements",
+          "boundary": null,
+          "valid_pick_region": null,
+          "valid_place_region": null
+        },
+        {
+          "id": "automatic_pick_2/right_1",
+          "reference_slot": "right_1",
+          "usage": "prohibited",
+          "pick_allowed": false,
+          "place_allowed": false,
+          "reason": "Raised bumps; never use for picking or placement",
+          "boundary": null,
+          "valid_pick_region": null,
+          "valid_place_region": null
+        },
+        {
+          "id": "automatic_pick_2/right_2",
+          "reference_slot": "right_2",
+          "usage": "prohibited",
+          "pick_allowed": false,
+          "place_allowed": false,
+          "reason": "Raised bumps; never use for picking or placement",
+          "boundary": null,
+          "valid_pick_region": null,
+          "valid_place_region": null
+        }
+      ]
+    }
+  ]
+}
