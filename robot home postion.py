@@ -1,4 +1,4 @@
-ved@Veds-MacBook-Air ~ % python3 -c "
+"
 import socket, time
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.connect(('172.21.0.121', 30002))

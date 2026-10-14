@@ -64,7 +64,7 @@ class Executor:
         robot: MockRobot,
         tracker=None,
         task_id: Optional[str] = None,
-        timeout_seconds: float = 5.0,
+        timeout_seconds: float = 30.0,
     ):
         self.robot   = robot
         self.tracker = tracker

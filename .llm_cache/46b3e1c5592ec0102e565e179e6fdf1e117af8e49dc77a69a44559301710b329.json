@@ -1,0 +1,9 @@
+{
+  "action": "pick",
+  "object_target": "grey tray",
+  "destination": "top tray slot 1",
+  "spatial_relation": "in",
+  "confidence": "high",
+  "raw_instruction": "pick up the grey tray from bottom tray slot 2 and place it in top tray slot 1",
+  "notes": null
+}

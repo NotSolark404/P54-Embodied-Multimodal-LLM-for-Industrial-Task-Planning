@@ -1,0 +1,11 @@
+{
+  "objects": [
+    {"label": "grey tray",          "bounding_box": [0, 0, 50, 50]},
+    {"label": "bottom tray slot 1", "bounding_box": [100, 100, 80, 80]},
+    {"label": "bottom tray slot 2", "bounding_box": [200, 100, 80, 80]},
+    {"label": "bottom tray slot 3", "bounding_box": [100, 200, 80, 80]},
+    {"label": "top tray slot 1",    "bounding_box": [400, 100, 80, 80]},
+    {"label": "top tray slot 2",    "bounding_box": [500, 100, 80, 80]},
+    {"label": "top tray slot 3",    "bounding_box": [400, 200, 80, 80]}
+  ]
+}

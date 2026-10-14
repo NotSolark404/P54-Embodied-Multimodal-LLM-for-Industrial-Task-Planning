@@ -1,25 +1,18 @@
 """
 ur5_script_robot.py
 -------------------
-Controls UR5 by sending URScript commands over a TCP socket.
-Gripper: OnRobot RG2 via URScript rg_grip() function.
-No ROS2, no RTDE library — works over plain Ethernet.
+Controls UR5 by sending URScript commands over TCP (port 30002).
+Gripper: OnRobot RG2 via Dashboard Server (port 29999) loading saved .urp programs.
 
-Why URScript over socket:
-    The UR5 controller box listens on port 30002 for URScript programs.
-    We send movement and gripper commands as plain text strings.
-    If the robot is unreachable, commands are logged only — pipeline still completes.
+Setup required on teach pendant:
+    - Save 'grip_close.urp': RG2 node, width=60mm, force=40N
+    - Save 'grip_open.urp':  RG2 node, width=67mm, force=40N
 
 Set in .env:
     ROBOT_BACKEND=urscript
-    UR5_ROBOT_IP=<robot IP from teach pendant Settings → Network>
-    UR5_MOVE_SPEED=0.1         (m/s, default 0.1 — slow and safe)
-    UR5_MOVE_ACCEL=0.5         (m/s², default 0.5)
-    UR5_TCP_HEIGHT=0.15        (approach height above table in metres)
-    UR5_GRASP_HEIGHT=0.01      (height to descend to for grasp)
-    UR5_GRIPPER_WIDTH_OPEN=1000  (RG2 open width in tenths of mm, 1000 = 100mm)
-    UR5_GRIPPER_WIDTH_CLOSE=0    (RG2 close width in tenths of mm, 0 = fully closed)
-    UR5_GRIPPER_FORCE=40         (RG2 grip force in Newtons)
+    UR5_ROBOT_IP=172.21.0.121
+    UR5_MOVE_SPEED=0.05
+    UR5_MOVE_ACCEL=0.05
 """
 
 import os
@@ -30,287 +23,260 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# ── Config from environment ────────────────────────────────────────────────────
-UR5_IP               = os.getenv("UR5_ROBOT_IP",          "192.168.1.100")
-UR5_PORT             = int(os.getenv("UR5_PORT",           "30002"))
-MOVE_SPEED           = float(os.getenv("UR5_MOVE_SPEED",   "0.1"))
-MOVE_ACCEL           = float(os.getenv("UR5_MOVE_ACCEL",   "0.5"))
-TCP_HEIGHT           = float(os.getenv("UR5_TCP_HEIGHT",   "0.15"))
-GRASP_HEIGHT         = float(os.getenv("UR5_GRASP_HEIGHT", "0.01"))
-GRIPPER_WIDTH_OPEN   = int(os.getenv("UR5_GRIPPER_WIDTH_OPEN",  "1000"))
-GRIPPER_WIDTH_CLOSE  = int(os.getenv("UR5_GRIPPER_WIDTH_CLOSE", "0"))
-GRIPPER_FORCE        = int(os.getenv("UR5_GRIPPER_FORCE",       "40"))
-GRIPPER_DELAY        = float(os.getenv("UR5_GRIPPER_DELAY",     "1.5"))
-MOVE_TIMEOUT         = float(os.getenv("UR5_MOVE_TIMEOUT",      "10.0"))
+# ── Config ─────────────────────────────────────────────────────────────────────
+UR5_IP       = os.getenv("UR5_ROBOT_IP",    "172.21.0.121")
+UR5_PORT     = 30002
+DASH_PORT    = 29999
+MOVE_SPEED   = float(os.getenv("UR5_MOVE_SPEED",  "0.05"))
+MOVE_ACCEL   = float(os.getenv("UR5_MOVE_ACCEL",  "0.05"))
+APPROACH_H   = 0.10   # metres above recorded z before descending
+TRANSIT_Z    = 0.35   # safe height for ALL lateral moves — clears the table near top tray
+BLEND        = 0.01   # blend radius to prevent C204A3 protective stop
+GRIPPER_WAIT = 4.0    # seconds to wait for grip program to finish
 
-# ── Robot orientation (tool pointing straight down) ───────────────────────────
-TOOL_ORIENTATION = [0.0, 3.14159, 0.0]
+HOME_JOINTS = [-1.568847, -2.343778, 2.104474, -1.361051, -1.565358, -4.708451]
+
+# ── Recorded slot positions [x, y, z, rx, ry, rz] ─────────────────────────────
+# z is the actual pick height; approach moves to z + APPROACH_H first
+POSITIONS = {
+    "bottom tray slot 1": [-0.433125, -0.004389,  0.051413,  3.138130, -0.045465,  0.000987],
+    "bottom tray slot 2": [-0.438373, -0.112308,  0.177986,  3.138118, -0.045475,  0.001013],
+    "bottom tray slot 3": [-0.296695, -0.001337,  0.158373,  3.138090, -0.045475,  0.000978],
+    # "top tray slot 1":    [-0.432930,  0.162761,  0.213637, -3.132231,  0.029664,  0.015672],
+    "top tray slot 2":    [-0.429305,  0.274608,  0.168093, -3.132172,  0.029563,  0.015840],
+    "top tray slot 3":    [-0.287118,  0.270020,  0.146490, -3.132196,  0.029646,  0.015836],
+    # "top tray slot 1":    [-0.432875,  0.162729,  0.041531, -3.132210,  0.029705,  0.015570],
+    # "top tray slot 1": [-0.432875, 0.162729, 0.041531, -3.132210, 0.029705, 0.015570],
+    "top tray slot 1": [-0.432894, 0.162284, 0.007908, -3.132186, 0.029680, 0.015675],
+    "grey tray":          [-0.421358, -0.007463, -0.017294, -3.132196,  0.029557,  0.015674],
+}
 
 
 class UR5ScriptRobot:
     """
-    UR5 robot driver using URScript over TCP socket.
-    Gripper: OnRobot RG2 via rg_grip() URScript function.
-    Falls back to dry-run logging if the robot is unreachable.
-
-    Interface matches MockRobot exactly — swap in main.py with one env var.
+    UR5 robot driver using URScript over TCP.
+    Gripper controlled via Dashboard Server loading saved .urp programs.
+    Falls back to dry-run logging if robot is unreachable.
+    Interface matches MockRobot — swap with ROBOT_BACKEND=urscript in .env.
     """
 
     def __init__(self):
-        self._ip:    str           = UR5_IP
-        self._held:  Optional[str] = None
-        self._pos:   tuple         = (0.0, 0.0, TCP_HEIGHT)
-        self._scene: dict          = {}
-        self._connected: bool      = self._check_connection()
+        self._ip       = UR5_IP
+        self._held: Optional[str] = None
+        self._current_pose: Optional[list] = None
+        self._scene: dict = {}
+        self._connected = self._check_connection()
 
-        if self._connected:
-            logger.info(f"[UR5-Script] Connected to {self._ip}:{UR5_PORT}")
-            print(f"\n  [UR5-Script] Connected to robot at {self._ip}\n")
-        else:
-            logger.warning(
-                f"[UR5-Script] Cannot reach {self._ip}:{UR5_PORT} "
-                f"— running in dry-run mode (commands logged only)"
-            )
-            print(
-                f"\n  [UR5-Script] Robot at {self._ip} unreachable "
-                f"— dry-run mode\n"
-            )
+        status = f"Connected to {self._ip}" if self._connected else f"UNREACHABLE — dry-run mode"
+        print(f"\n  [UR5] {status}\n")
+        logger.info(f"[UR5] {status}")
 
-    # ── Connection ─────────────────────────────────────────────────────────────
+    # ── Connection ──────────────────────────────────────────────────────────────
 
     def _check_connection(self) -> bool:
-        """Check if the UR5 controller is reachable."""
         try:
-            with socket.create_connection(
-                (self._ip, UR5_PORT), timeout=2.0
-            ):
+            with socket.create_connection((self._ip, UR5_PORT), timeout=2.0):
                 return True
-        except (OSError, ConnectionRefusedError, TimeoutError):
+        except OSError:
             return False
 
-    def _send(self, script: str) -> bool:
-        """
-        Send a URScript line to the robot.
-        Returns True on success, False on failure.
-        """
-        log_line = script.strip()[:80]
+    def _send_script(self, script: str) -> bool:
+        """Send URScript to port 30002."""
         if not self._connected:
-            logger.info(f"[UR5-Script][DRY-RUN] {log_line}")
+            logger.info(f"[UR5][DRY-RUN] {script.strip()[:80]}")
             time.sleep(0.05)
             return False
-
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(MOVE_TIMEOUT)
+                s.settimeout(15.0)
                 s.connect((self._ip, UR5_PORT))
-                payload = (script.strip() + "\n").encode("utf-8")
-                s.sendall(payload)
-                logger.info(f"[UR5-Script] SENT: {log_line}")
+                s.sendall((script.strip() + "\n").encode("utf-8"))
+            logger.info(f"[UR5] SENT: {script.strip()[:80]}")
             return True
         except Exception as e:
-            logger.warning(f"[UR5-Script] Send failed ({e}) — dry-run fallback")
+            logger.warning(f"[UR5] Send failed: {e}")
             return False
 
-    # ── Scene ──────────────────────────────────────────────────────────────────
+    def _dashboard(self, cmd: str) -> str:
+        """Send a command to the Dashboard Server (port 29999)."""
+        if not self._connected:
+            logger.info(f"[UR5][DRY-RUN] dashboard: {cmd}")
+            return "dry-run"
+        try:
+            with socket.create_connection((self._ip, DASH_PORT), timeout=5.0) as s:
+                s.settimeout(5.0)
+                s.recv(4096)   # consume banner
+                s.sendall((cmd + "\n").encode())
+                time.sleep(0.3)
+                resp = s.recv(4096).decode("utf-8", errors="replace").strip()
+            logger.info(f"[UR5] DASH {cmd!r} → {resp}")
+            return resp
+        except Exception as e:
+            logger.warning(f"[UR5] Dashboard failed: {e}")
+            return ""
+
+    # ── Scene ───────────────────────────────────────────────────────────────────
 
     def load_scene(self, scene: dict) -> None:
-        """Load the current scene from the vision module."""
+        """Load current scene from vision module."""
         self._scene = {}
         for obj in scene.get("objects", []):
             label = obj.get("label") or obj.get("name", "")
             pos   = obj.get("position", (0.0, 0.0))
             if isinstance(pos, (list, tuple)):
                 self._scene[label] = (float(pos[0]), float(pos[1]))
-        logger.info(f"[UR5-Script] Scene loaded: {len(self._scene)} objects")
+        # # Update grey tray position from vision
+        # for label in self._scene:
+        #     if "grey" in label.lower():
+        #         # POSITIONS["grey tray"] = None   # reset — will be set via locate()
+        logger.info(f"[UR5] Scene loaded: {list(self._scene.keys())}")
 
-    # ── Robot commands ─────────────────────────────────────────────────────────
+    # ── Public interface ────────────────────────────────────────────────────────
 
     def locate(self, object_name: str):
-        """Return CommandResult confirming object exists in scene."""
+        """Return CommandResult confirming object exists."""
         from simulation_backend.mock_robot import CommandResult
         name_lower = object_name.lower()
-        for label, pos in self._scene.items():
+        for label in self._scene:
             if name_lower in label.lower():
-                logger.info(f"[UR5-Script] Located '{label}' at {pos}")
-                print(f"  [UR5] LOCATE  '{label}' → ({pos[0]:.3f}, {pos[1]:.3f})")
-                return CommandResult(
-                    success=True,
-                    command="locate",
-                    message=f"Found '{label}' at {pos}"
-                )
-        return CommandResult(
-            success=False,
-            command="locate",
-            message=f"Object '{object_name}' not found in scene"
-        )
-
-    def move_to(self, x: float, y: float):
-        """Move TCP to (x, y) at approach height."""
-        from simulation_backend.mock_robot import CommandResult
-        x, y = float(x), float(y)
-        rx, ry, rz = TOOL_ORIENTATION
-
-        approach_pose = (
-            f"p[{x:.4f},{y:.4f},{TCP_HEIGHT:.4f},"
-            f"{rx:.4f},{ry:.4f},{rz:.4f}]"
-        )
-        script = (
-            f"movel({approach_pose}, "
-            f"a={MOVE_ACCEL}, v={MOVE_SPEED})"
-        )
-        print(f"  [UR5] MOVE    ({x:.3f}, {y:.3f}, {TCP_HEIGHT:.3f})")
-        self._send(script)
-        time.sleep(1.0)
-        self._pos = (x, y, TCP_HEIGHT)
-        return CommandResult(
-            success=True,
-            command="move",
-            message=f"Moved to ({x:.3f}, {y:.3f})"
-        )
+                print(f"  [UR5] LOCATE  '{label}'")
+                return CommandResult(success=True, command="locate",
+                                     message=f"Found '{label}'")
+        return CommandResult(success=False, command="locate",
+                             message=f"'{object_name}' not in scene")
 
     def move_to_object(self, object_name: str):
-        """Move to a named object's position."""
+        """
+        Move to approach height above a named slot or object.
+        Always lifts to TRANSIT_Z first, then travels laterally, then descends
+        to approach height — prevents collisions with the table near top tray slots.
+        """
         from simulation_backend.mock_robot import CommandResult
-        name_lower = object_name.lower()
-        for label, pos in self._scene.items():
-            if name_lower in label.lower():
-                return self.move_to(pos[0], pos[1])
-        return CommandResult(
-            success=False,
-            command="move",
-            message=f"Object '{object_name}' not found"
-        )
+        pose = self._resolve_pose(object_name)
+        if pose is None:
+            return CommandResult(success=False, command="move",
+                                 message=f"No pose for '{object_name}'")
+        x, y, z, rx, ry, rz = pose
+
+        # Step 1: lift straight up to transit height at current position
+        if self._current_pose is not None:
+            cx, cy, cz, crx, cry, crz = self._current_pose
+            if TRANSIT_Z > cz + APPROACH_H:   # only lift if we're below transit height
+                self._move_to_pose(cx, cy, TRANSIT_Z, crx, cry, crz, label="LIFT")
+
+        # Step 2: travel laterally at transit height to target x, y
+        self._move_to_pose(x, y, TRANSIT_Z, rx, ry, rz, label="TRANSIT")
+
+        # Step 3: descend to approach height above target
+        self._move_to_pose(x, y, z + APPROACH_H, rx, ry, rz, label=f"APPROACH")
+
+        self._current_pose = pose
+        return CommandResult(success=True, command="move",
+                             message=f"At approach for '{object_name}'")
 
     def pick(self, object_name: str):
-        """Descend, close RG2 gripper, ascend."""
+        """Move to approach, descend, close gripper, ascend."""
         from simulation_backend.mock_robot import CommandResult
         if self._held:
-            return CommandResult(
-                success=False,
-                command="pick",
-                message=f"Already holding '{self._held}'"
-            )
+            return CommandResult(success=False, command="pick",
+                                 message=f"Already holding '{self._held}'")
+        if self._current_pose is None:
+            res = self.move_to_object(object_name)
+            if not res.success:
+                return res
 
+        x, y, z, rx, ry, rz = self._current_pose
         print(f"  [UR5] PICK    '{object_name}'")
-        self._descend()
+        self._gripper_open()
+        self._move_to_pose(x, y, z, rx, ry, rz, label="DESCEND", speed_factor=0.5)
         self._gripper_close()
-        self._ascend()
+        self._move_to_pose(x, y, z + APPROACH_H, rx, ry, rz, label="ASCEND", speed_factor=0.5)
 
         self._held = object_name
-        logger.info(f"[UR5-Script] Picked '{object_name}'")
-        return CommandResult(
-            success=True,
-            command="pick",
-            message=f"Picked '{object_name}'"
-        )
+        return CommandResult(success=True, command="pick",
+                             message=f"Picked '{object_name}'")
 
     def place(self, object_name: str):
-        """Descend, open RG2 gripper, ascend."""
+        """Move to approach, descend, open gripper, ascend."""
         from simulation_backend.mock_robot import CommandResult
-        print(f"  [UR5] PLACE   '{self._held}' at '{object_name}'")
-        self._descend()
+        res = self.move_to_object(object_name)
+        if not res.success:
+            return res
+
+        x, y, z, rx, ry, rz = self._current_pose
+        print(f"  [UR5] PLACE   '{self._held}' → '{object_name}'")
+        self._move_to_pose(x, y, z, rx, ry, rz, label="DESCEND", speed_factor=0.5)
         self._gripper_open()
-        self._ascend()
+        self._move_to_pose(x, y, z + APPROACH_H, rx, ry, rz, label="ASCEND", speed_factor=0.5)
 
         self._held = None
-        logger.info(f"[UR5-Script] Placed at '{object_name}'")
-        return CommandResult(
-            success=True,
-            command="place",
-            message=f"Placed at '{object_name}'"
-        )
+        return CommandResult(success=True, command="place",
+                             message=f"Placed at '{object_name}'")
 
     def reset(self) -> None:
-        """Move robot to home position."""
-        rx, ry, rz = TOOL_ORIENTATION
-        home_pose = (
-            f"p[0.300,0.000,0.400,"
-            f"{rx:.4f},{ry:.4f},{rz:.4f}]"
+        """Return to home joint position."""
+        j = HOME_JOINTS
+        script = (
+            f"movej([{j[0]},{j[1]},{j[2]},{j[3]},{j[4]},{j[5]}], "
+            f"a={MOVE_ACCEL}, v={MOVE_SPEED})"
         )
-        script = f"movel({home_pose}, a={MOVE_ACCEL}, v={MOVE_SPEED})"
-        print("  [UR5] HOME    (0.300, 0.000, 0.400)")
-        self._send(script)
+        print("  [UR5] HOME")
+        self._send_script(script)
+        time.sleep(5.0)
         self._held = None
-        self._pos  = (0.3, 0.0, 0.4)
+        self._current_pose = None
 
     def stop(self) -> None:
-        """Emergency stop."""
-        self._send("stopj(2.0)")
-        logger.warning("[UR5-Script] Emergency stop sent")
+        self._send_script("stopj(2.0)")
+        logger.warning("[UR5] Emergency stop sent")
 
     def get_state(self) -> dict:
         return {
             "ip":          self._ip,
             "connected":   self._connected,
-            "position":    self._pos,
             "held_object": self._held,
+            "pose":        self._current_pose,
         }
 
-    # ── Motion helpers ─────────────────────────────────────────────────────────
+    # ── Motion helpers ──────────────────────────────────────────────────────────
 
-    def _descend(self) -> None:
-        """Descend to grasp height at current (x, y)."""
-        x, y, _ = self._pos
-        rx, ry, rz = TOOL_ORIENTATION
-        grasp_pose = (
-            f"p[{x:.4f},{y:.4f},{GRASP_HEIGHT:.4f},"
-            f"{rx:.4f},{ry:.4f},{rz:.4f}]"
-        )
+    def _resolve_pose(self, object_name: str) -> Optional[list]:
+        """Look up 6D pose for a named object."""
+        name_lower = object_name.lower()
+        for key, pose in POSITIONS.items():
+            if name_lower in key.lower() and pose is not None:
+                return pose
+        return None
+
+    def _move_to_pose(self, x, y, z, rx, ry, rz,
+                      label="MOVE", speed_factor=1.0) -> None:
+        v = MOVE_SPEED * speed_factor
+        a = MOVE_ACCEL * speed_factor
         script = (
-            f"movel({grasp_pose}, "
-            f"a={MOVE_ACCEL}, v={MOVE_SPEED * 0.5})"
+            f"movel(p[{x:.4f},{y:.4f},{z:.4f},"
+            f"{rx:.4f},{ry:.4f},{rz:.4f}], "
+            f"a={a:.3f}, v={v:.3f}, r={BLEND})"
         )
-        print(f"  [UR5] DESCEND ({x:.3f}, {y:.3f}, {GRASP_HEIGHT:.3f})")
-        self._send(script)
-        time.sleep(0.8)
+        print(f"  [UR5] {label:<10} ({x:.3f}, {y:.3f}, {z:.3f})")
+        self._send_script(script)
+        # Wait proportional to distance (rough estimate)
+        time.sleep(2.0 / speed_factor)
 
-    def _ascend(self) -> None:
-        """Return to approach height."""
-        x, y, _ = self._pos
-        rx, ry, rz = TOOL_ORIENTATION
-        retract_pose = (
-            f"p[{x:.4f},{y:.4f},{TCP_HEIGHT:.4f},"
-            f"{rx:.4f},{ry:.4f},{rz:.4f}]"
-        )
-        script = (
-            f"movel({retract_pose}, "
-            f"a={MOVE_ACCEL}, v={MOVE_SPEED * 0.5})"
-        )
-        print(f"  [UR5] ASCEND  ({x:.3f}, {y:.3f}, {TCP_HEIGHT:.3f})")
-        self._send(script)
-        time.sleep(0.8)
-
-    # ── OnRobot RG2 gripper ───────────────────────────────────────────────────
+    # ── Gripper via Dashboard Server ────────────────────────────────────────────
+    # Requires grip_close.urp and grip_open.urp saved on the robot.
 
     def _gripper_close(self) -> None:
-        """
-        Close OnRobot RG2 gripper using rg_grip() URScript function.
-        rg_grip(width, force, depth_compensation, wait_for_grip, blocking)
-            width: target width in tenths of mm (0 = fully closed)
-            force: grip force in Newtons
-        Requires OnRobot RG2 URCap installed on teach pendant.
-        """
-        script = (
-            f"def rg2_close():\n"
-            f"  rg_grip({GRIPPER_WIDTH_CLOSE}, {GRIPPER_FORCE}, 0, False, False)\n"
-            f"end\n"
-            f"rg2_close()"
-        )
-        print(f"  [UR5] RG2 CLOSE (width={GRIPPER_WIDTH_CLOSE}, force={GRIPPER_FORCE}N)")
-        self._send(script)
-        time.sleep(GRIPPER_DELAY)
+        print(f"  [UR5] GRIP CLOSE")
+        self._dashboard("load grip_close.urp")
+        time.sleep(0.5)
+        self._dashboard("play")
+        time.sleep(GRIPPER_WAIT)
+        self._dashboard("stop")
 
     def _gripper_open(self) -> None:
-        """
-        Open OnRobot RG2 gripper using rg_grip() URScript function.
-            width: target width in tenths of mm (1000 = 100mm open)
-        """
-        script = (
-            f"def rg2_open():\n"
-            f"  rg_grip({GRIPPER_WIDTH_OPEN}, {GRIPPER_FORCE}, 0, False, False)\n"
-            f"end\n"
-            f"rg2_open()"
-        )
-        print(f"  [UR5] RG2 OPEN  (width={GRIPPER_WIDTH_OPEN}, force={GRIPPER_FORCE}N)")
-        self._send(script)
-        time.sleep(GRIPPER_DELAY)
+        print(f"  [UR5] GRIP OPEN")
+        self._dashboard("load grip_open.urp")
+        time.sleep(0.5)
+        self._dashboard("play")
+        time.sleep(GRIPPER_WAIT)
+        self._dashboard("stop")
