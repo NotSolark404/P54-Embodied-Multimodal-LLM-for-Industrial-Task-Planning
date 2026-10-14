@@ -46,6 +46,11 @@ class ParsedInstruction(BaseModel):
         default=None,
         description="Where the object should go, if applicable (e.g. 'left tray', 'workstation A')."
     )
+    source: Optional[str] = Field(
+        default=None,
+        description="Where the object is picked up from, if stated "
+                    "(e.g. 'bottom tray slot 3' in 'pick the grey tray from bottom tray slot 3')."
+    )
     spatial_relation: Optional[str] = Field(
         default=None,
         description="Spatial relationship described (e.g. 'left of', 'near', 'on top of')."

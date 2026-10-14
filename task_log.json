@@ -2032,5 +2032,300 @@
       }
     },
     "completed_at": "2026-09-16T10:36:31.675132+00:00"
+  },
+  {
+    "task_id": "bf5a13ea",
+    "instruction": "pick up the grey tray from bottom tray slot 3 and place it in top tray slot 1",
+    "model": "ollama",
+    "created_at": "2026-10-14T02:24:24.645387+00:00",
+    "status": "completed",
+    "stages": {
+      "llm_parse": {
+        "stage": "llm_parse",
+        "status": "success",
+        "timestamp": "2026-10-14T02:24:24.647702+00:00",
+        "latency_ms": 2.1,
+        "payload": {
+          "is_multi_action": false,
+          "action_count": 1,
+          "segments": [
+            "pick up the grey tray from bottom tray slot 3 and place it in top tray slot 1"
+          ],
+          "actions": [
+            {
+              "action": "pick",
+              "object_target": "grey tray",
+              "destination": "top tray slot 1",
+              "spatial_relation": "in",
+              "confidence": "high",
+              "raw_instruction": "pick up the grey tray from bottom tray slot 3 and place it in top tray slot 1",
+              "notes": null
+            }
+          ]
+        },
+        "error": null
+      },
+      "vision_lookup": {
+        "stage": "vision_lookup",
+        "status": "success",
+        "timestamp": "2026-10-14T02:24:24.647805+00:00",
+        "latency_ms": 0.0,
+        "payload": {
+          "object_count": 7,
+          "objects": [
+            "bottom tray slot 1",
+            "bottom tray slot 2",
+            "bottom tray slot 3",
+            "top tray slot 1",
+            "top tray slot 2",
+            "top tray slot 3",
+            "grey tray"
+          ],
+          "source": "REAL"
+        },
+        "error": null
+      },
+      "task_plan": {
+        "stage": "task_plan",
+        "status": "success",
+        "timestamp": "2026-10-14T02:24:28.014209+00:00",
+        "latency_ms": 0.1,
+        "payload": {
+          "steps": 5,
+          "commands": [
+            "locate",
+            "move",
+            "pick",
+            "move",
+            "place"
+          ],
+          "action_count": 1,
+          "multi_action": false
+        },
+        "error": null
+      },
+      "execution": {
+        "stage": "execution",
+        "status": "success",
+        "timestamp": "2026-10-14T02:24:28.014987+00:00",
+        "latency_ms": 0.0,
+        "payload": {
+          "step": 5,
+          "command": "place",
+          "result": "Placed 'grey tray' at 'top tray slot 1' (-0.432884, 0.1621)"
+        },
+        "error": null
+      },
+      "feedback": {
+        "stage": "feedback",
+        "status": "success",
+        "timestamp": "2026-10-14T02:24:28.015016+00:00",
+        "latency_ms": null,
+        "payload": {
+          "steps_completed": 5,
+          "total_steps": 5,
+          "latency_ms": 0.38966599913692335
+        },
+        "error": null
+      }
+    },
+    "completed_at": "2026-10-14T02:24:28.015023+00:00"
+  },
+  {
+    "task_id": "e535d8c3",
+    "instruction": "pick up the grey tray from bottom tray slot 3 and place it in top tray slot 1",
+    "model": "ollama",
+    "created_at": "2026-10-14T02:28:50.968958+00:00",
+    "status": "completed",
+    "stages": {
+      "llm_parse": {
+        "stage": "llm_parse",
+        "status": "success",
+        "timestamp": "2026-10-14T02:28:50.970728+00:00",
+        "latency_ms": 1.6,
+        "payload": {
+          "is_multi_action": false,
+          "action_count": 1,
+          "segments": [
+            "pick up the grey tray from bottom tray slot 3 and place it in top tray slot 1"
+          ],
+          "actions": [
+            {
+              "action": "pick",
+              "object_target": "grey tray",
+              "destination": "top tray slot 1",
+              "spatial_relation": "in",
+              "confidence": "high",
+              "raw_instruction": "pick up the grey tray from bottom tray slot 3 and place it in top tray slot 1",
+              "notes": null
+            }
+          ]
+        },
+        "error": null
+      },
+      "vision_lookup": {
+        "stage": "vision_lookup",
+        "status": "success",
+        "timestamp": "2026-10-14T02:28:50.970825+00:00",
+        "latency_ms": 0.0,
+        "payload": {
+          "object_count": 7,
+          "objects": [
+            "bottom tray slot 1",
+            "bottom tray slot 2",
+            "bottom tray slot 3",
+            "top tray slot 1",
+            "top tray slot 2",
+            "top tray slot 3",
+            "grey tray"
+          ],
+          "source": "REAL"
+        },
+        "error": null
+      },
+      "task_plan": {
+        "stage": "task_plan",
+        "status": "success",
+        "timestamp": "2026-10-14T02:28:54.005418+00:00",
+        "latency_ms": 0.1,
+        "payload": {
+          "steps": 5,
+          "commands": [
+            "locate",
+            "move",
+            "pick",
+            "move",
+            "place"
+          ],
+          "action_count": 1,
+          "multi_action": false
+        },
+        "error": null
+      },
+      "execution": {
+        "stage": "execution",
+        "status": "success",
+        "timestamp": "2026-10-14T02:31:08.195318+00:00",
+        "latency_ms": null,
+        "payload": {
+          "step": 5,
+          "command": "place",
+          "result": "Placed at 'top tray slot 1'"
+        },
+        "error": null
+      },
+      "feedback": {
+        "stage": "feedback",
+        "status": "success",
+        "timestamp": "2026-10-14T02:31:08.196065+00:00",
+        "latency_ms": null,
+        "payload": {
+          "steps_completed": 5,
+          "total_steps": 5,
+          "latency_ms": 134188.10014399968
+        },
+        "error": null
+      }
+    },
+    "completed_at": "2026-10-14T02:31:08.196247+00:00"
+  },
+  {
+    "task_id": "1dd926c1",
+    "instruction": "pick up the grey tray from bottom tray slot 3 and place it in top tray slot 1",
+    "model": "ollama",
+    "created_at": "2026-10-14T02:48:06.474628+00:00",
+    "status": "completed",
+    "stages": {
+      "llm_parse": {
+        "stage": "llm_parse",
+        "status": "success",
+        "timestamp": "2026-10-14T02:50:17.060091+00:00",
+        "latency_ms": 130585.6,
+        "payload": {
+          "is_multi_action": false,
+          "action_count": 1,
+          "segments": [
+            "pick up the grey tray from bottom tray slot 3 and place it in top tray slot 1"
+          ],
+          "actions": [
+            {
+              "action": "pick",
+              "object_target": "grey tray",
+              "destination": "top tray slot 1",
+              "source": "bottom tray slot 3",
+              "spatial_relation": null,
+              "confidence": "high",
+              "raw_instruction": "pick up the grey tray from bottom tray slot 3 and place it in top tray slot 1",
+              "notes": null
+            }
+          ]
+        },
+        "error": null
+      },
+      "vision_lookup": {
+        "stage": "vision_lookup",
+        "status": "success",
+        "timestamp": "2026-10-14T02:50:17.060867+00:00",
+        "latency_ms": 0.3,
+        "payload": {
+          "object_count": 7,
+          "objects": [
+            "bottom tray slot 1",
+            "bottom tray slot 2",
+            "bottom tray slot 3",
+            "top tray slot 1",
+            "top tray slot 2",
+            "top tray slot 3",
+            "grey tray"
+          ],
+          "source": "REAL"
+        },
+        "error": null
+      },
+      "task_plan": {
+        "stage": "task_plan",
+        "status": "success",
+        "timestamp": "2026-10-14T02:50:23.138267+00:00",
+        "latency_ms": 0.8,
+        "payload": {
+          "steps": 5,
+          "commands": [
+            "locate",
+            "move",
+            "pick",
+            "move",
+            "place"
+          ],
+          "action_count": 1,
+          "multi_action": false
+        },
+        "error": null
+      },
+      "execution": {
+        "stage": "execution",
+        "status": "success",
+        "timestamp": "2026-10-14T02:52:37.531425+00:00",
+        "latency_ms": null,
+        "payload": {
+          "step": 5,
+          "command": "place",
+          "result": "Placed at 'top tray slot 1'"
+        },
+        "error": null
+      },
+      "feedback": {
+        "stage": "feedback",
+        "status": "success",
+        "timestamp": "2026-10-14T02:52:37.532523+00:00",
+        "latency_ms": null,
+        "payload": {
+          "steps_completed": 5,
+          "total_steps": 5,
+          "latency_ms": 134388.67576800112
+        },
+        "error": null
+      }
+    },
+    "completed_at": "2026-10-14T02:52:37.532775+00:00"
   }
 ]

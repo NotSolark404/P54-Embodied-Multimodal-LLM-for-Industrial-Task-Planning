@@ -30,6 +30,11 @@ import sys
 import argparse
 import logging
 import time
+import cv2
+cv2.imshow = lambda *args, **kwargs: None
+cv2.waitKey = lambda *args, **kwargs: 0
+cv2.namedWindow = lambda *args, **kwargs: None
+cv2.destroyAllWindows = lambda *args, **kwargs: None
 
 os.environ["PYDANTIC_DISABLE_PLUGINS"] = "1"
 
@@ -45,7 +50,8 @@ from llm_backend.schema            import (
 )
 from llm_backend.tracker           import PipelineTracker
 from task_planner.planner          import TaskPlanner
-from simulation_backend.vision.scene_representation import get_current_scene
+# from simulation_backend.vision.scene_representation import get_current_scene
+from simulation_backend.vision.scene_representation import get_current_scene as _sim_get_current_scene
 from simulation_backend.mock_robot import MockRobot
 from simulation_backend.executor   import Executor
 from simulation_backend.action_schema import plan_to_commands
@@ -80,6 +86,10 @@ def _get_scene_and_robot(sim=None, verbose: bool = True):
     Returns:
         (scene dict, robot instance)
     """
+        # Real UR5: use the recorded slot scene and the module-level UR5ScriptRobot
+    if os.getenv("ROBOT_BACKEND", "").lower() == "urscript":
+        scene = get_current_scene(verbose=verbose, sim=sim)
+        return scene, globals()["robot"]
     if sim is not None:
         scene = get_current_scene(verbose=verbose, sim=sim)
         robot = sim.get_robot()
@@ -88,6 +98,12 @@ def _get_scene_and_robot(sim=None, verbose: bool = True):
         robot = MockRobot()
     return scene, robot
 
+def get_current_scene(verbose=True, sim=None):
+    """Use the recorded UR5 slot names as the scene when driving the real robot."""
+    if os.getenv("ROBOT_BACKEND", "").lower() == "urscript":
+        from simulation_backend.robots.ur5_script_robot import build_scene
+        return build_scene()
+    return _sim_get_current_scene(verbose=verbose, sim=sim)
 
 def _execution_timeout_for_robot(robot) -> float:
     """
@@ -96,9 +112,11 @@ def _execution_timeout_for_robot(robot) -> float:
     MockRobot commands are near-instant, but real KUKA PyBullet pick/place
     sequences include multiple IK moves, physics stepping, and settling time.
     Keep the safety timeout, with an environment override for final tuning.
-    """
+        """
     if getattr(robot, "model_name", "") == "kuka_iiwa" or type(robot).__name__ == "KukaIIWA":
-        return float(os.getenv("KUKA_EXECUTION_TIMEOUT", "15.0"))
+            return float(os.getenv("KUKA_EXECUTION_TIMEOUT", "15.0"))
+    if type(robot).__name__ == "UR5ScriptRobot":
+            return float(os.getenv("UR5_EXECUTION_TIMEOUT", "180.0"))
     return float(os.getenv("EXECUTOR_TIMEOUT_SECONDS", "5.0"))
 
 
@@ -562,6 +580,10 @@ if robot_type == "ros":
     from simulation_backend.robots.ros_robot import ROSRobot
     robot = ROSRobot()
     logger.info("Using ROS2 robot")
+elif robot_type == "urscript":                                        
+    from simulation_backend.robots.ur5_script_robot import UR5ScriptRobot  
+    robot = UR5ScriptRobot()                                          
+    logger.info("Using UR5 URScript robot")
 elif robot_type == "real":
     from simulation_backend.robots.kuka_robot import KukaRobot
     robot = KukaRobot()

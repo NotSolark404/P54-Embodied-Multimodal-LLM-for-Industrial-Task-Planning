@@ -22,7 +22,7 @@ services:
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
       - LLM_BACKEND=ollama
-      - ROBOT_BACKEND=mock
+      - ROBOT_BACKEND=${ROBOT_BACKEND:-mock}
       - SIMULATION_MODE=DIRECT
       - YOLO_DEVICE=cpu
     volumes:

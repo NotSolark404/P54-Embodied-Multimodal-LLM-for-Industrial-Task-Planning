@@ -230,6 +230,13 @@ class TaskPlanner:
             )
 
         obj_pos = Position(x=obj["position"][0], y=obj["position"][1])
+        # If the instruction named a pickup location ("from bottom tray slot 3"),
+        # go there instead of the object's own recorded position.
+        pick_name = obj_name
+        src = _find_in_scene(scene, parsed.source) if parsed.source else None
+        if src is not None:
+            pick_name = parsed.source
+            obj_pos = Position(x=src["position"][0], y=src["position"][1])
 
         steps.append(RobotCommand(
             step=step_n, command_type=CommandType.LOCATE,
@@ -239,14 +246,14 @@ class TaskPlanner:
         step_n += 1
         steps.append(RobotCommand(
             step=step_n, command_type=CommandType.MOVE,
-            target_object=obj_name, target_position=obj_pos,
-            description=f"Navigate arm to '{obj_name}'",
+            target_object=pick_name, target_position=obj_pos,
+            description=f"Navigate arm to '{pick_name}'",
         ))
         step_n += 1
         steps.append(RobotCommand(
             step=step_n, command_type=CommandType.PICK,
-            target_object=obj_name,
-            description=f"Grasp '{obj_name}'",
+            target_object=pick_name,
+            description=f"Grasp '{obj_name}' at '{pick_name}'",
         ))
         step_n += 1
 
