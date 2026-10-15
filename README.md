@@ -33,7 +33,8 @@ For spatial-relation internals, multi-action command handling, design rationale,
 | Dinith Thejana | 105231766 | Team Member (Simulation Backend) |
 | Kaveesha Dharmadasa | 105271678 | Team Member (Documentation / Scene Representation) |
 
-**Supervisors:** Prof. Prem Prakash Jayaraman · Prof. Boris Eisenbart · Muhammad Saeed
+**Project Supervisor:** Prof. Afzal Azeem Chowdhary
+**Industry Partner Representation:** Prof. Prem Prakash Jayaraman · Prof. Boris Eisenbart · Muhammad Saeed
 **Industry Partner:** ARENA2036 / University of Stuttgart
 
 ---
@@ -392,12 +393,3 @@ python comparison_report.py
 - Yao et al. — *ReAct: Synergizing Reasoning and Acting in Language Models*
 - Bode et al. — *A Comparison of Prompt Engineering Techniques for Task Planning and Execution in Service Robotics* (arXiv 2410.22997)
 
----
-
-## Contact
-
-| Supervisor | Email |
-|---|---|
-| Muhammad Saeed | msaeed@swin.edu.au |
-| Prof. Boris Eisenbart | beisenbart@swin.edu.au |
-| Prof. Prem Prakash Jayaraman | pjayaraman@swin.edu.au |

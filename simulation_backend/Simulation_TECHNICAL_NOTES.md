@@ -127,12 +127,3 @@ synonym, and ambiguous instruction categories.
 
 ---
 
-## Project Progress
-
-| Phase | Deliverables |
-|---|---|
-| Sprint 1 | LLM parser, schema, prompts, edge cases, multi-model evaluation framework |
-| Sprint 2 | Task planner, mock robot, executor, action schema, 5-stage pipeline, tracker |
-| Sprint 3 | Spatial relation handling, multi-step planning, baseline parser, full evaluation suite |
-| Sprint 4 | Live PyBullet vision (YOLO/colour + ground-truth fallback), Franka/KUKA real robot execution, end-to-end regression testing |
-| Sprint 5 | Fine-tuned YOLOv8 integration, multi-action command support, Docker + local-LLM (Ollama) environment, cross-platform reproducibility validation |
