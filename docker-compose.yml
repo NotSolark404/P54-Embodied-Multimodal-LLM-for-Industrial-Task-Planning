@@ -1,36 +1,67 @@
+x-common-env: &common_env
+  UR5_STATE_FILE: /data/tray_state.json
+  LLM_CACHE_PATH: /data/.llm_cache
+
+x-app: &app
+  env_file:
+    - .env
+    - .env.compose
+  command: ["sleep", "infinity"]
+  restart: unless-stopped
+  depends_on:
+    - ollama
+
 services:
   ollama:
     image: ollama/ollama:latest
     container_name: p54_ollama
-    # No host port mapping: the p54 service reaches Ollama over the compose
-    # network, and publishing 11434 collides with a natively installed Ollama.
-    expose:
-      - "11434"
+    restart: unless-stopped
     volumes:
       - ollama_models:/root/.ollama
-    restart: unless-stopped
+    networks:
+      default:
+        aliases:
+          - p54_ollama
 
-  p54:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: p54_pipeline
-    env_file:
-      - .env
-    # These override .env: the container is headless and has no CUDA runtime,
-    # so a host .env set to GUI/cuda still works for native runs.
+  p54-sim:
+    <<: *app
+    profiles: ["sim"]
+    image: p54-sim:latest
+    container_name: p54_sim
+    build: { context: ., target: sim }
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - LLM_BACKEND=ollama
-      - ROBOT_BACKEND=${ROBOT_BACKEND:-mock}
-      - SIMULATION_MODE=DIRECT
-      - YOLO_DEVICE=cpu
+      <<: *common_env
+      ROBOT_BACKEND: mock
     volumes:
-      - .:/app
-    depends_on:
-      - ollama
-    stdin_open: true
-    tty: true
+      - p54_data:/data
+      # - .:/app
+
+  p54-robot:
+    <<: *app
+    profiles: ["robot"]
+    image: p54-robot:latest
+    container_name: p54_robot
+    build: { context: ., target: robot }
+    environment:
+      <<: *common_env
+      ROBOT_BACKEND: urscript
+    volumes:
+      - p54_data:/data
+      # - .:/app
+
+  p54-full:
+    <<: *app
+    profiles: ["full"]
+    image: p54-full:latest
+    container_name: p54_full
+    build: { context: ., target: full }
+    environment:
+      <<: *common_env
+      ROBOT_BACKEND: ${ROBOT_BACKEND:-mock}
+    volumes:
+      - p54_data:/data
+      # - .:/app
 
 volumes:
   ollama_models:
+  p54_data:

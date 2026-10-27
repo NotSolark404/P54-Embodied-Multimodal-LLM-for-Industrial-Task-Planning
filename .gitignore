@@ -1,5 +1,21 @@
-# Byte-compiled / optimized / DLL files
+.env
+.env.*
+!.env.example
+.env.compose
 __pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+tray_state.json
+.llm_cache/
+*.log
+.DS_Store
+.idea/
+.vscode/
+.deploy_backup/
+# Byte-compiled / optimized / DLL files
 *.py[codz]
 *$py.class
 
@@ -48,7 +64,6 @@ coverage.xml
 *.cover
 *.py.cover
 .hypothesis/
-.pytest_cache/
 cover/
 
 # Translations
@@ -56,7 +71,6 @@ cover/
 *.pot
 
 # Django stuff:
-*.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
@@ -135,11 +149,9 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
 .envrc
 .venv
 env/
-venv/
 ENV/
 env.bak/
 venv.bak/
@@ -155,7 +167,6 @@ venv.bak/
 /site
 
 # mypy
-.mypy_cache/
 .dmypy.json
 dmypy.json
 
@@ -186,7 +197,6 @@ cython_debug/
 #  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
 #  and can be added to the global gitignore or merged into this file. However, if you prefer, 
 #  you could uncomment the following to ignore the entire vscode folder
-.vscode/
 
 # Ruff stuff:
 .ruff_cache/
@@ -208,7 +218,6 @@ __marimo__/
 
 # macOS
 .DS_Storecapstone/
-.DS_Store
 *.DS_Store
 capstone/
 
@@ -219,7 +228,6 @@ simulation_backend/vision/detection_models
 llm_cache
 
 # LLM disk cache (llm_backend/cache.py) — local only, never committed
-.llm_cache/
 
 CLAUDE.md
 .claude/
