@@ -1,13 +1,23 @@
-# Opt-in NVIDIA GPU override for the p54 service.
+# Opt-in NVIDIA GPU override for the p54-sim and p54-full services.
 #
-#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml \
-#       run --rm p54 python main.py "pick up the red block and place it in the left tray"
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile sim up -d --build
+#   docker compose exec p54-sim python3 -B main.py "pick up the red block and place it in the left tray"
 #
 # Kept out of docker-compose.yml so the base stack still starts on machines
 # without an NVIDIA GPU (a reservation there fails with "could not select
 # device driver nvidia with capabilities: [[gpu]]").
 services:
-  p54:
+  p54-sim:
+    environment:
+      - YOLO_DEVICE=cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+  p54-full:
     environment:
       - YOLO_DEVICE=cuda
     deploy:
